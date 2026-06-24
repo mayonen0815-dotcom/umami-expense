@@ -296,4 +296,148 @@ function ExpenseForm({profile,expenseId,onSave,onCancel}){
         {preview?(<div><img src={preview} className="receipt-preview" alt="領収書"/><br/><button className="btn btn-secondary" style={{marginTop:8,fontSize:12}} onClick={()=>{setPreview('');setFile(null);setForm(f=>({...f,receipt_url:''}));}}>🗑 削除</button></div>):(<label className="upload-area"><div className="upload-icon">📎</div><div className="upload-text">クリックして画像を選択<br/><span style={{fontSize:11,color:'#94a3b8'}}>PNG, JPG, PDF</span></div><input type="file" style={{display:'none'}} accept="image/*,.pdf" onChange={handleFile}/></label>)}
       </div>
       <div style={{display:'flex',gap:10}}>
-        <button className="btn btn-secondary" style={{flex:1,justifyCon
+        <button className="btn btn-secondary" style={{flex:1,justifyContent:'center'}} onClick={()=>handleSubmit(false)} disabled={loading}>下書き保存</button>
+        <button className="btn btn-primary" style={{flex:1,justifyContent:'center'}} onClick={()=>handleSubmit(true)} disabled={loading}>{loading?'処理中...':'申請する'}</button>
+      </div>
+    </div>
+  );
+}
+
+function ExpenseDetail({profile,expenseId,onBack,onEdit}){
+  const[expense,setExpense]=useState(null);
+  const[logs,setLogs]=useState([]);
+  const[comment,setComment]=useState('');
+  const[loading,setLoading]=useState(false);
+  useEffect(()=>{loadData()},[expenseId]);
+  async function loadData(){
+    const[{data:exp},{data:lg}]=await Promise.all([sb.from('expenses').select('*,profiles(name)').eq('id',expenseId).single(),sb.from('approval_logs').select('*,profiles(name)').eq('expense_id',expenseId).order('created_at')]);
+    setExpense(exp);setLogs(lg||[]);
+  }
+  async function doAction(action){
+    setLoading(true);
+    const next={manager:{approve:'pending_office',reject:'rejected'},office:{approve:'approved',reject:'rejected'}};
+    const newStatus=action==='submit'?'pending_manager':next[profile.role]?.[action];
+    await sb.from('expenses').update({status:newStatus}).eq('id',expenseId);
+    await sb.from('approval_logs').insert({expense_id:expenseId,actor_id:profile.id,action,comment,from_status:expense.status,to_status:newStatus});
+    setComment('');await loadData();setLoading(false);
+  }
+  async function doDelete(){if(!confirm('削除しますか？'))return;await sb.from('expenses').delete().eq('id',expenseId);onBack();}
+  if(!expense)return<div className="empty">読み込み中...</div>;
+  const canApprove=(profile.role==='manager'&&expense.status==='pending_manager')||(profile.role==='office'&&expense.status==='pending_office');
+  const canSubmit=profile.role==='staff'&&expense.status==='draft';
+  const canEdit=profile.role==='staff'&&['draft','rejected'].includes(expense.status)&&expense.user_id===profile.id;
+  const steps=[{label:'現場',role:'staff',active:expense.status==='draft',done:expense.status!=='draft'},{label:'マネージャー',role:'manager',active:expense.status==='pending_manager',done:['pending_office','approved'].includes(expense.status)},{label:'事務所',role:'office',active:expense.status==='pending_office',done:expense.status==='approved'}];
+  return(
+    <div className="page">
+      <button className="btn btn-secondary" onClick={onBack} style={{marginBottom:20}}>← 戻る</button>
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20}}>
+        <div><h2 style={{fontSize:18,fontWeight:700}}>{expense.title}</h2><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>申請者: {expense.profiles?.name}</div></div>
+        <Badge status={expense.status}/>
+      </div>
+      {expense.status!=='rejected'&&(<div className="approval-flow">{steps.map((s,i)=>(<React.Fragment key={s.role}><div className={`flow-step ${s.active?'active':''} ${s.done?'done':''}`}><div className="flow-step-name">{s.done?'✅':s.active?'🔵':'⭕'} {s.label}</div></div>{i<steps.length-1&&<span className="flow-arrow">→</span>}</React.Fragment>))}</div>)}
+      <div className="card" style={{padding:20,marginBottom:14}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+          {[['金額',fmt(expense.amount)],['カテゴリ',getCat(expense.category)],['日付',fmtDate(expense.expense_date)],['登録日',fmtDate(expense.created_at)]].map(([k,v])=>(<div key={k}><div style={{fontSize:11,color:'#94a3b8',marginBottom:2}}>{k}</div><div style={{fontSize:13,fontWeight:600}}>{v}</div></div>))}
+        </div>
+        {expense.description&&<div style={{marginTop:14,paddingTop:14,borderTop:'1px solid #f1f5f9'}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:4}}>摘要</div><div style={{fontSize:13}}>{expense.description}</div></div>}
+      </div>
+      {expense.receipt_url&&(<div className="card" style={{padding:16,marginBottom:14}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:8}}>領収書</div><a href={expense.receipt_url} target="_blank" rel="noreferrer"><img src={expense.receipt_url} className="receipt-preview" alt="領収書"/></a></div>)}
+      {logs.length>0&&(<div className="card" style={{padding:20,marginBottom:14}}><div style={{fontSize:13,fontWeight:600,marginBottom:14}}>承認履歴</div>{logs.map(l=>(<div className="log-item" key={l.id}><div className="log-avatar">{l.profiles?.name?.[0]}</div><div className="log-content"><div className="log-meta"><span style={{fontWeight:600,color:'#374151'}}>{l.profiles?.name}</span>{' · '}<span className={`action-${l.action}`}>{l.action==='approve'?'承認':l.action==='reject'?'却下':'申請'}</span>{' · '}{fmtDate(l.created_at)}</div>{l.comment&&<div className="log-comment">{l.comment}</div>}</div></div>))}</div>)}
+      {(canApprove||canSubmit||canEdit)&&(<div className="card" style={{padding:20}}>
+        {canApprove&&(<><textarea className="form-input" rows={2} style={{resize:'none',marginBottom:12}} value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメント（任意）"/><div style={{display:'flex',gap:10}}><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={()=>doAction('reject')} disabled={loading}>❌ 却下</button><button className="btn btn-success" style={{flex:1,justifyContent:'center'}} onClick={()=>doAction('approve')} disabled={loading}>✅ 承認</button></div></>)}
+        {canSubmit&&<button className="btn btn-primary" style={{width:'100%',justifyContent:'center'}} onClick={()=>doAction('submit')} disabled={loading}>📤 申請する</button>}
+        {canEdit&&(<div style={{display:'flex',gap:10,marginTop:canSubmit?12:0,paddingTop:canSubmit?12:0,borderTop:canSubmit?'1px solid #f1f5f9':'none'}}><button className="btn btn-secondary" style={{flex:1,justifyContent:'center'}} onClick={()=>onEdit(expenseId)}>✏️ 編集</button><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={doDelete}>🗑 削除</button></div>)}
+      </div>)}
+    </div>
+  );
+}
+
+function ApprovalPage({profile,onSelect}){
+  const[expenses,setExpenses]=useState([]);
+  const[loading,setLoading]=useState(true);
+  useEffect(()=>{loadData()},[]);
+  async function loadData(){const targetStatus=profile.role==='manager'?'pending_manager':'pending_office';const{data}=await sb.from('expenses').select('*,profiles(name)').eq('status',targetStatus).order('created_at',{ascending:true});setExpenses(data||[]);setLoading(false);}
+  return(
+    <div className="page">
+      <div className="page-header"><div><div className="page-title">承認待ち</div><div className="page-sub">あなたの承認を待っている申請</div></div></div>
+      <div className="table-wrap">
+        {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="empty">✅ 承認待ちの申請はありません</div>:expenses.map(e=>(<div className="table-row" key={e.id} onClick={()=>onSelect(e.id)}><div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{e.title}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>{e.profiles?.name} · {getCat(e.category)} · {fmtDate(e.expense_date)}</div></div><div style={{display:'flex',alignItems:'center',gap:12}}><span style={{fontSize:13,fontWeight:700}}>{fmt(e.amount)}</span><Badge status={e.status}/><span style={{color:'#cbd5e1'}}>›</span></div></div>))}
+      </div>
+    </div>
+  );
+}
+
+function ReportPage({profile}){
+  const[month,setMonth]=useState(new Date().toISOString().slice(0,7));
+  const[expenses,setExpenses]=useState([]);
+  const[loading,setLoading]=useState(true);
+  useEffect(()=>{loadData()},[month]);
+  async function loadData(){
+    setLoading(true);
+    const start=month+'-01';
+    const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);
+    let q=sb.from('expenses').select('*').gte('expense_date',start).lte('expense_date',end).eq('status','approved');
+    if(profile.role==='staff')q=q.eq('user_id',profile.id);
+    const{data}=await q;setExpenses(data||[]);setLoading(false);
+  }
+  const total=expenses.reduce((s,e)=>s+e.amount,0);
+  const byCat=CATEGORIES.map((cat,i)=>{const amount=expenses.filter(e=>e.category===cat.value).reduce((s,e)=>s+e.amount,0);return{...cat,amount,color:CAT_COLORS[i%CAT_COLORS.length],pct:total?Math.round(amount/total*100):0};}).filter(c=>c.amount>0).sort((a,b)=>b.amount-a.amount);
+  const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
+  const r=60,cx=80,cy=80,circ=2*Math.PI*r;let offset=0;
+  const arcs=byCat.map(cat=>{const dash=(cat.pct/100)*circ;const el={cat,dash,offset};offset+=dash;return el;});
+  return(
+    <div className="page">
+      <div className="page-header"><div className="page-title">月次レポート</div><select className="form-input" style={{width:160}} value={month} onChange={e=>setMonth(e.target.value)}>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></div>
+      {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="empty">この月の承認済み経費はありません</div>:(<>
+        <div className="card" style={{padding:20,marginBottom:14}}><div style={{fontSize:12,color:'#64748b',marginBottom:4}}>承認済み合計</div><div style={{fontSize:30,fontWeight:700}}>{fmt(total)}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>{expenses.length}件</div></div>
+        {byCat.length>0&&(<div className="card" style={{padding:20,marginBottom:14}}><div style={{fontSize:13,fontWeight:600,marginBottom:16}}>カテゴリ別</div><div className="donut-wrap"><svg width="160" height="160">{arcs.map(({cat,dash,offset})=>(<circle key={cat.value} cx={cx} cy={cy} r={r} fill="none" stroke={cat.color} strokeWidth="20" strokeDasharray={`${dash} ${circ-dash}`} strokeDashoffset={-offset}/>))}<text x={cx} y={cy-6} textAnchor="middle" fill="#64748b" fontSize="11">合計</text><text x={cx} y={cy+10} textAnchor="middle" fill="#0f172a" fontSize="13" fontWeight="bold">{new Intl.NumberFormat('ja-JP',{notation:'compact'}).format(total)}円</text></svg><div className="legend">{byCat.map(cat=>(<div className="legend-item" key={cat.value}><div className="legend-dot" style={{background:cat.color}}/><span className="legend-label">{cat.label}</span><span className="legend-pct">{cat.pct}%</span><span className="legend-amt">{fmt(cat.amount)}</span></div>))}</div></div></div>)}
+        <div className="table-wrap"><div className="table-header"><span>明細</span></div>{expenses.sort((a,b)=>new Date(a.expense_date)-new Date(b.expense_date)).map(e=>(<div className="table-row" key={e.id} style={{cursor:'default'}}><div style={{flex:1}}><div style={{fontSize:13}}>{e.title}</div><div style={{fontSize:12,color:'#94a3b8'}}>{getCat(e.category)} · {e.expense_date}</div></div><span style={{fontSize:13,fontWeight:600}}>{fmt(e.amount)}</span></div>))}</div>
+      </>)}
+    </div>
+  );
+}
+
+function App(){
+  const[user,setUser]=useState(null);
+  const[profile,setProfile]=useState(null);
+  const[authLoading,setAuthLoading]=useState(true);
+  const[page,setPage]=useState('dashboard');
+  const[selectedId,setSelectedId]=useState(null);
+  const[editId,setEditId]=useState(null);
+  useEffect(()=>{
+    sb.auth.getSession().then(({data:{session}})=>{setUser(session?.user||null);if(session?.user)loadProfile(session.user.id);else setAuthLoading(false);});
+    const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{setUser(session?.user||null);if(session?.user)loadProfile(session.user.id);else{setProfile(null);setAuthLoading(false);}});
+    return()=>subscription.unsubscribe();
+  },[]);
+  async function loadProfile(uid){const{data}=await sb.from('profiles').select('*').eq('id',uid).single();setProfile(data);setAuthLoading(false);}
+  async function logout(){await sb.auth.signOut();setPage('dashboard');setSelectedId(null);setEditId(null);}
+  if(authLoading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'#94a3b8'}}>読み込み中...</div>;
+  if(!user||!profile)return<Login/>;
+  const isApprover=['manager','office'].includes(profile.role);
+  const navItems=[{key:'dashboard',icon:'🏠',label:'ダッシュボード'},{key:'expenses',icon:'📋',label:'経費一覧'},...(isApprover?[{key:'approvals',icon:'✅',label:'承認待ち'}]:[]),{key:'reports',icon:'📊',label:'レポート'}];
+  function renderPage(){
+    if(page==='detail'&&selectedId)return<ExpenseDetail profile={profile} expenseId={selectedId} onBack={()=>{setPage('expenses');setSelectedId(null);}} onEdit={id=>{setEditId(id);setPage('form');}}/>;
+    if(page==='form')return<ExpenseForm profile={profile} expenseId={editId} onSave={()=>{setPage('expenses');setEditId(null);}} onCancel={()=>{setPage('expenses');setEditId(null);}}/>;
+    if(page==='expenses')return<ExpenseList profile={profile} onSelect={id=>{setSelectedId(id);setPage('detail');}} onNew={()=>{setEditId(null);setPage('form');}}/>;
+    if(page==='approvals')return<ApprovalPage profile={profile} onSelect={id=>{setSelectedId(id);setPage('detail');}}/>;
+    if(page==='reports')return<ReportPage profile={profile}/>;
+    return<Dashboard profile={profile}/>;
+  }
+  return(
+    <div className="app">
+      <aside className="sidebar">
+        <div className="sidebar-logo"><div className="logo-icon">🧾</div><div><div className="logo-text">うま味経費</div><div className="logo-sub">Expense Manager</div></div></div>
+        <nav>{navItems.map(n=>(<button key={n.key} className={`nav-item ${page===n.key?'active':''}`} onClick={()=>{setPage(n.key);setSelectedId(null);setEditId(null);}}><span>{n.icon}</span>{n.label}</button>))}</nav>
+        <div className="sidebar-user">
+          <div className="user-info"><div className="user-avatar">{profile.name[0]}</div><div><div className="user-name">{profile.name}</div><span className={`role-badge ${ROLE_BADGE[profile.role]||'role-staff'}`}>{ROLE_LABELS[profile.role]||profile.role}</span></div></div>
+          <button className="logout-btn" onClick={logout}>🚪 ログアウト</button>
+        </div>
+      </aside>
+      <main className="main">{renderPage()}</main>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
