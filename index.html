@@ -31,9 +31,9 @@ nav{flex:1;padding:10px}
 .role-office{background:#dcfce7;color:#15803d}
 .logout-btn{background:none;border:none;color:#94a3b8;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;padding:4px 0}
 .logout-btn:hover{color:#0f172a}
-.main{flex:1;overflow-y:auto}
-.page{padding:28px;max-width:900px;margin:0 auto}
-.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.main{flex:1;overflow-y:auto;padding-bottom:80px}
+.page{padding:20px;max-width:900px;margin:0 auto}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
 .page-title{font-size:20px;font-weight:700;color:#0f172a}
 .page-sub{font-size:13px;color:#64748b;margin-top:2px}
 .btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
@@ -47,16 +47,15 @@ nav{flex:1;padding:10px}
 .btn-success:hover{background:#15803d}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
-.stat-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px}
 .stat-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px}
-.stat-value{font-size:26px;font-weight:700;color:#0f172a}
+.stat-value{font-size:24px;font-weight:700;color:#0f172a}
 .stat-label{font-size:12px;color:#64748b;margin-top:2px}
 .table-wrap{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
-.table-row{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background .1s}
+.table-row{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background .1s}
 .table-row:last-child{border-bottom:none}
 .table-row:hover{background:#f8fafc}
-.table-header{display:flex;align-items:center;padding:10px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em}
 .badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;white-space:nowrap}
 .badge-draft{background:#f1f5f9;color:#475569}
 .badge-pending{background:#fef9c3;color:#854d0e}
@@ -64,20 +63,20 @@ nav{flex:1;padding:10px}
 .badge-rejected{background:#fee2e2;color:#991b1b}
 .form-group{margin-bottom:16px}
 .form-label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
-.form-input{width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:9px 12px;font-size:13px;color:#0f172a;outline:none;transition:border .15s}
+.form-input{width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;font-size:14px;color:#0f172a;outline:none;transition:border .15s}
 .form-input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .login-wrap{min-height:100vh;background:linear-gradient(135deg,#1e3a8a,#2563eb,#3b82f6);display:flex;align-items:center;justify-content:center;padding:20px}
-.login-card{background:#fff;border-radius:20px;padding:40px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
-.login-logo{text-align:center;margin-bottom:28px}
+.login-card{background:#fff;border-radius:20px;padding:32px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.login-logo{text-align:center;margin-bottom:24px}
 .login-logo-icon{width:56px;height:56px;background:#2563eb;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:10px}
 .login-title{font-size:22px;font-weight:700;color:#0f172a}
 .login-sub{font-size:13px;color:#64748b;margin-top:4px}
 .error-msg{background:#fee2e2;color:#991b1b;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px}
-.approval-flow{display:flex;align-items:center;gap:8px;margin-bottom:20px;padding:14px 18px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0}
+.approval-flow{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:12px 16px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;flex-wrap:wrap}
 .flow-step{text-align:center;font-size:12px}
 .flow-step-name{font-weight:600;color:#0f172a}
-.flow-arrow{color:#94a3b8;font-size:18px}
+.flow-arrow{color:#94a3b8;font-size:16px}
 .flow-step.active .flow-step-name{color:#2563eb}
 .flow-step.done .flow-step-name{color:#16a34a}
 .log-item{display:flex;gap:12px;margin-bottom:14px}
@@ -88,24 +87,52 @@ nav{flex:1;padding:10px}
 .action-approve{color:#16a34a;font-weight:600}
 .action-reject{color:#dc2626;font-weight:600}
 .action-submit{color:#2563eb;font-weight:600}
-.empty{padding:50px;text-align:center;color:#94a3b8;font-size:14px}
-.receipt-preview{max-width:280px;border-radius:8px;border:1px solid #e2e8f0;margin-top:8px}
+.empty{padding:40px;text-align:center;color:#94a3b8;font-size:14px}
+.receipt-preview{max-width:100%;border-radius:8px;border:1px solid #e2e8f0;margin-top:8px}
 .upload-area{border:2px dashed #e2e8f0;border-radius:10px;padding:30px;text-align:center;cursor:pointer;transition:all .15s}
 .upload-area:hover{border-color:#2563eb;background:#eff6ff}
 .upload-icon{font-size:32px;margin-bottom:8px}
 .upload-text{font-size:13px;color:#64748b}
-.donut-wrap{display:flex;gap:24px;align-items:center}
-.legend{flex:1}
+.donut-wrap{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.legend{flex:1;min-width:160px}
 .legend-item{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
 .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .legend-label{flex:1;color:#374151}
 .legend-pct{color:#64748b;font-size:12px}
-.legend-amt{font-weight:600;color:#0f172a;text-align:right;min-width:80px}
-.filter-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
-.search-wrap{position:relative;flex:2;min-width:180px}
+.legend-amt{font-weight:600;color:#0f172a;text-align:right;min-width:70px}
+.filter-row{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.search-wrap{position:relative;flex:2;min-width:140px}
 .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px}
 .search-input{padding-left:32px!important}
-@media(max-width:700px){.sidebar{display:none}.stats{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr}}
+.mobile-header{display:none;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:50}
+.mobile-header-title{font-size:16px;font-weight:700;color:#0f172a}
+.hamburger{background:none;border:none;font-size:22px;cursor:pointer;padding:4px}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100}
+.sidebar-overlay.open{display:block}
+.sidebar-drawer{position:fixed;left:0;top:0;height:100vh;width:260px;background:#fff;z-index:101;transform:translateX(-100%);transition:transform .25s;display:flex;flex-direction:column}
+.sidebar-drawer.open{transform:translateX(0)}
+.bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e2e8f0;padding:8px 0;z-index:50}
+.bottom-nav-items{display:flex;justify-content:space-around}
+.bottom-nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 8px;border:none;background:none;cursor:pointer;min-width:60px}
+.bottom-nav-item span:first-child{font-size:22px}
+.bottom-nav-item span:last-child{font-size:10px;color:#94a3b8;font-weight:500}
+.bottom-nav-item.active span:last-child{color:#2563eb}
+.fab{display:none;position:fixed;bottom:80px;right:20px;width:56px;height:56px;border-radius:50%;background:#2563eb;color:#fff;font-size:28px;border:none;cursor:pointer;box-shadow:0 4px 16px rgba(37,99,235,.4);z-index:50;align-items:center;justify-content:center}
+@media(max-width:768px){
+  .sidebar{display:none}
+  .mobile-header{display:flex}
+  .bottom-nav{display:block}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .form-grid{grid-template-columns:1fr}
+  .fab{display:flex}
+  .page{padding:16px;padding-bottom:100px}
+  .page-header .btn-primary{display:none}
+}
+@media(min-width:769px){
+  .mobile-header{display:none}
+  .bottom-nav{display:none}
+  .fab{display:none}
+}
 </style>
 </head>
 <body>
@@ -116,7 +143,7 @@ const SUPABASE_URL='https://vossmbvgdixgfgnkzcdl.supabase.co';
 const SUPABASE_KEY='sb_publishable_4IKc7bIsEwvbVSNdbPK9Jw_nI2MzKd2';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const CATEGORIES=[{value:'transport',label:'交通費'},{value:'meal',label:'食費・接待費'},{value:'accommodation',label:'宿泊費'},{value:'supplies',label:'備品・消耗品'},{value:'communication',label:'通信費'},{value:'other',label:'その他'}];
-const STATUS={draft:{label:'下書き',badge:'badge-draft'},pending_manager:{label:'マネージャー承認待ち',badge:'badge-pending'},pending_office:{label:'事務所承認待ち',badge:'badge-pending'},approved:{label:'承認済み',badge:'badge-approved'},rejected:{label:'却下',badge:'badge-rejected'}};
+const STATUS={draft:{label:'下書き',badge:'badge-draft'},pending_manager:{label:'承認待ち(MG)',badge:'badge-pending'},pending_office:{label:'承認待ち(事務)',badge:'badge-pending'},approved:{label:'承認済み',badge:'badge-approved'},rejected:{label:'却下',badge:'badge-rejected'}};
 const ROLE_LABELS={staff:'現場',manager:'マネージャー',office:'事務所'};
 const ROLE_BADGE={staff:'role-staff',manager:'role-manager',office:'role-office'};
 const CAT_COLORS=['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981','#6366f1'];
@@ -147,7 +174,7 @@ function Login(){
           {err&&<div className="error-msg">{err}</div>}
           <div className="form-group"><label className="form-label">メールアドレス</label><input className="form-input" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="example@company.com" required/></div>
           <div className="form-group"><label className="form-label">パスワード</label><input className="form-input" type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••" required/></div>
-          <button className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:'11px'}} disabled={loading}>{loading?'ログイン中...':'ログイン'}</button>
+          <button className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:'12px'}} disabled={loading}>{loading?'ログイン中...':'ログイン'}</button>
         </form>
       </div>
     </div>
@@ -176,8 +203,8 @@ function Dashboard({profile}){
       <div className="page-header"><div><div className="page-title">ダッシュボード</div><div className="page-sub">こんにちは、{profile.name} さん</div></div></div>
       <div className="stats">{cards.map(c=>(<div className="stat-card" key={c.label}><div className="stat-icon" style={{background:c.bg}}>{c.icon}</div><div className="stat-value">{loading?'—':c.value}</div><div className="stat-label">{c.label}</div></div>))}</div>
       <div className="card">
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 18px',borderBottom:'1px solid #f1f5f9'}}><span style={{fontWeight:600,fontSize:14}}>最近の申請</span></div>
-        {loading?<div className="empty">読み込み中...</div>:recent.length===0?<div className="empty">申請がありません</div>:recent.map(e=>(<div className="table-row" key={e.id}><div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{e.title}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>{fmtDate(e.expense_date)}</div></div><div style={{display:'flex',alignItems:'center',gap:12}}><span style={{fontSize:13,fontWeight:700}}>{fmt(e.amount)}</span><Badge status={e.status}/></div></div>))}
+        <div style={{padding:'14px 16px',borderBottom:'1px solid #f1f5f9',fontWeight:600,fontSize:14}}>最近の申請</div>
+        {loading?<div className="empty">読み込み中...</div>:recent.length===0?<div className="empty">申請がありません</div>:recent.map(e=>(<div className="table-row" key={e.id}><div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{e.title}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>{fmtDate(e.expense_date)}</div></div><div style={{display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:13,fontWeight:700}}>{fmt(e.amount)}</span><Badge status={e.status}/></div></div>))}
       </div>
     </div>
   );
@@ -250,13 +277,13 @@ function ExpenseList({profile,onSelect,onNew}){
         </div>
       </div>
       <div className="filter-row">
-        <div className="search-wrap"><span className="search-icon">🔍</span><input className="form-input search-input" placeholder="タイトルで検索..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
-        <select className="form-input" style={{width:150}} value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">全ステータス</option>{Object.entries(STATUS).map(([v,s])=><option key={v} value={v}>{s.label}</option>)}</select>
-        {profile.role!=='staff'&&(<select className="form-input" style={{width:130}} value={personFilter} onChange={e=>setPersonFilter(e.target.value)}><option value="">全申請者</option>{personList.map(n=><option key={n} value={n}>{n}</option>)}</select>)}
-        <select className="form-input" style={{width:120}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{monthList.map(m=><option key={m} value={m}>{m.replace('-','年')}月</option>)}</select>
+        <div className="search-wrap"><span className="search-icon">🔍</span><input className="form-input search-input" placeholder="検索..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
+        <select className="form-input" style={{width:120,fontSize:13}} value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">全ステータス</option>{Object.entries(STATUS).map(([v,s])=><option key={v} value={v}>{s.label}</option>)}</select>
+        {profile.role!=='staff'&&(<select className="form-input" style={{width:110,fontSize:13}} value={personFilter} onChange={e=>setPersonFilter(e.target.value)}><option value="">全申請者</option>{personList.map(n=><option key={n} value={n}>{n}</option>)}</select>)}
+        <select className="form-input" style={{width:100,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{monthList.map(m=><option key={m} value={m}>{m.replace('-','年')}月</option>)}</select>
       </div>
       <div className="table-wrap">
-        {loading?<div className="empty">読み込み中...</div>:filtered.length===0?<div className="empty">申請がありません</div>:filtered.map(e=>(<div className="table-row" key={e.id} onClick={()=>onSelect(e.id)}><div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{e.title}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>{getCat(e.category)} · {fmtDate(e.expense_date)}{profile.role!=='staff'&&e.profiles?.name&&` · ${e.profiles.name}`}</div></div><div style={{display:'flex',alignItems:'center',gap:12}}><span style={{fontSize:13,fontWeight:700}}>{fmt(e.amount)}</span><Badge status={e.status}/><span style={{color:'#cbd5e1'}}>›</span></div></div>))}
+        {loading?<div className="empty">読み込み中...</div>:filtered.length===0?<div className="empty">申請がありません</div>:filtered.map(e=>(<div className="table-row" key={e.id} onClick={()=>onSelect(e.id)}><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.title}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>{getCat(e.category)} · {e.expense_date}{profile.role!=='staff'&&e.profiles?.name&&` · ${e.profiles.name}`}</div></div><div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0,marginLeft:8}}><span style={{fontSize:13,fontWeight:700}}>{fmt(e.amount)}</span><Badge status={e.status}/></div></div>))}
       </div>
     </div>
   );
@@ -280,9 +307,9 @@ function ExpenseForm({profile,expenseId,onSave,onCancel}){
   }
   return(
     <div className="page">
-      <div className="page-header"><div><button className="btn btn-secondary" onClick={onCancel}>← 戻る</button></div></div>
+      <div style={{marginBottom:16}}><button className="btn btn-secondary" onClick={onCancel}>← 戻る</button></div>
       <h2 style={{fontSize:18,fontWeight:700,marginBottom:20}}>{isEdit?'経費を編集':'経費を申請'}</h2>
-      <div className="card" style={{padding:24,marginBottom:16}}>
+      <div className="card" style={{padding:20,marginBottom:16}}>
         <div className="form-group"><label className="form-label">タイトル *</label><input className="form-input" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="例: 東京出張 交通費"/></div>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">金額（円）*</label><input className="form-input" type="number" min="0" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} placeholder="0"/></div>
@@ -291,13 +318,13 @@ function ExpenseForm({profile,expenseId,onSave,onCancel}){
         <div className="form-group"><label className="form-label">カテゴリ</label><select className="form-input" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{CATEGORIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>
         <div className="form-group"><label className="form-label">摘要</label><textarea className="form-input" rows={3} style={{resize:'none'}} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="詳細・メモ（任意）"/></div>
       </div>
-      <div className="card" style={{padding:24,marginBottom:20}}>
+      <div className="card" style={{padding:20,marginBottom:20}}>
         <label className="form-label">領収書</label>
-        {preview?(<div><img src={preview} className="receipt-preview" alt="領収書"/><br/><button className="btn btn-secondary" style={{marginTop:8,fontSize:12}} onClick={()=>{setPreview('');setFile(null);setForm(f=>({...f,receipt_url:''}));}}>🗑 削除</button></div>):(<label className="upload-area"><div className="upload-icon">📎</div><div className="upload-text">クリックして画像を選択<br/><span style={{fontSize:11,color:'#94a3b8'}}>PNG, JPG, PDF</span></div><input type="file" style={{display:'none'}} accept="image/*,.pdf" onChange={handleFile}/></label>)}
+        {preview?(<div><img src={preview} className="receipt-preview" alt="領収書"/><br/><button className="btn btn-secondary" style={{marginTop:8,fontSize:12}} onClick={()=>{setPreview('');setFile(null);setForm(f=>({...f,receipt_url:''}));}}>🗑 削除</button></div>):(<label className="upload-area"><div className="upload-icon">📎</div><div className="upload-text">タップして画像を選択<br/><span style={{fontSize:11,color:'#94a3b8'}}>PNG, JPG, PDF</span></div><input type="file" style={{display:'none'}} accept="image/*,.pdf" onChange={handleFile}/></label>)}
       </div>
       <div style={{display:'flex',gap:10}}>
-        <button className="btn btn-secondary" style={{flex:1,justifyContent:'center'}} onClick={()=>handleSubmit(false)} disabled={loading}>下書き保存</button>
-        <button className="btn btn-primary" style={{flex:1,justifyContent:'center'}} onClick={()=>handleSubmit(true)} disabled={loading}>{loading?'処理中...':'申請する'}</button>
+        <button className="btn btn-secondary" style={{flex:1,justifyContent:'center',padding:'12px'}} onClick={()=>handleSubmit(false)} disabled={loading}>下書き保存</button>
+        <button className="btn btn-primary" style={{flex:1,justifyContent:'center',padding:'12px'}} onClick={()=>handleSubmit(true)} disabled={loading}>{loading?'処理中...':'申請する'}</button>
       </div>
     </div>
   );
@@ -331,28 +358,28 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
   const canSubmit=profile.role==='staff'&&expense.status==='draft';
   const canEdit=profile.role==='staff'&&['draft','rejected'].includes(expense.status)&&expense.user_id===profile.id;
   const canDelete=['manager','office'].includes(profile.role);
-  const steps=[{label:'現場',role:'staff',active:expense.status==='draft',done:expense.status!=='draft'},{label:'マネージャー',role:'manager',active:expense.status==='pending_manager',done:['pending_office','approved'].includes(expense.status)},{label:'事務所',role:'office',active:expense.status==='pending_office',done:expense.status==='approved'}];
+  const steps=[{label:'現場',role:'staff',active:expense.status==='draft',done:expense.status!=='draft'},{label:'MG',role:'manager',active:expense.status==='pending_manager',done:['pending_office','approved'].includes(expense.status)},{label:'事務所',role:'office',active:expense.status==='pending_office',done:expense.status==='approved'}];
   return(
     <div className="page">
-      <button className="btn btn-secondary" onClick={onBack} style={{marginBottom:20}}>← 戻る</button>
-      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20}}>
-        <div><h2 style={{fontSize:18,fontWeight:700}}>{expense.title}</h2><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>申請者: {expense.profiles?.name}</div></div>
+      <div style={{marginBottom:16}}><button className="btn btn-secondary" onClick={onBack}>← 戻る</button></div>
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16}}>
+        <div><h2 style={{fontSize:17,fontWeight:700}}>{expense.title}</h2><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>申請者: {expense.profiles?.name}</div></div>
         <Badge status={expense.status}/>
       </div>
       {expense.status!=='rejected'&&(<div className="approval-flow">{steps.map((s,i)=>(<React.Fragment key={s.role}><div className={`flow-step ${s.active?'active':''} ${s.done?'done':''}`}><div className="flow-step-name">{s.done?'✅':s.active?'🔵':'⭕'} {s.label}</div></div>{i<steps.length-1&&<span className="flow-arrow">→</span>}</React.Fragment>))}</div>)}
-      <div className="card" style={{padding:20,marginBottom:14}}>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+      <div className="card" style={{padding:16,marginBottom:12}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
           {[['金額',fmt(expense.amount)],['カテゴリ',getCat(expense.category)],['日付',fmtDate(expense.expense_date)],['登録日',fmtDate(expense.created_at)]].map(([k,v])=>(<div key={k}><div style={{fontSize:11,color:'#94a3b8',marginBottom:2}}>{k}</div><div style={{fontSize:13,fontWeight:600}}>{v}</div></div>))}
         </div>
-        {expense.description&&<div style={{marginTop:14,paddingTop:14,borderTop:'1px solid #f1f5f9'}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:4}}>摘要</div><div style={{fontSize:13}}>{expense.description}</div></div>}
+        {expense.description&&<div style={{marginTop:12,paddingTop:12,borderTop:'1px solid #f1f5f9'}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:4}}>摘要</div><div style={{fontSize:13}}>{expense.description}</div></div>}
       </div>
-      {expense.receipt_url&&(<div className="card" style={{padding:16,marginBottom:14}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:8}}>領収書</div><a href={expense.receipt_url} target="_blank" rel="noreferrer"><img src={expense.receipt_url} className="receipt-preview" alt="領収書"/></a></div>)}
-      {logs.length>0&&(<div className="card" style={{padding:20,marginBottom:14}}><div style={{fontSize:13,fontWeight:600,marginBottom:14}}>承認履歴</div>{logs.map(l=>(<div className="log-item" key={l.id}><div className="log-avatar">{l.profiles?.name?.[0]}</div><div className="log-content"><div className="log-meta"><span style={{fontWeight:600,color:'#374151'}}>{l.profiles?.name}</span>{' · '}<span className={`action-${l.action}`}>{l.action==='approve'?'承認':l.action==='reject'?'却下':'申請'}</span>{' · '}{fmtDate(l.created_at)}</div>{l.comment&&<div className="log-comment">{l.comment}</div>}</div></div>))}</div>)}
-      {(canApprove||canSubmit||canEdit||canDelete)&&(<div className="card" style={{padding:20}}>
-        {canApprove&&(<><textarea className="form-input" rows={2} style={{resize:'none',marginBottom:12}} value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメント（任意）"/><div style={{display:'flex',gap:10,marginBottom:12}}><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={()=>doAction('reject')} disabled={loading}>❌ 却下</button><button className="btn btn-success" style={{flex:1,justifyContent:'center'}} onClick={()=>doAction('approve')} disabled={loading}>✅ 承認</button></div></>)}
-        {canSubmit&&<button className="btn btn-primary" style={{width:'100%',justifyContent:'center',marginBottom:12}} onClick={()=>doAction('submit')} disabled={loading}>📤 申請する</button>}
-        {canEdit&&(<div style={{display:'flex',gap:10,marginBottom:12}}><button className="btn btn-secondary" style={{flex:1,justifyContent:'center'}} onClick={()=>onEdit(expenseId)}>✏️ 編集</button><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={doDelete}>🗑 削除</button></div>)}
-        {canDelete&&!canEdit&&(<button className="btn btn-danger" style={{width:'100%',justifyContent:'center'}} onClick={doDelete}>🗑 この申請を削除</button>)}
+      {expense.receipt_url&&(<div className="card" style={{padding:14,marginBottom:12}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:8}}>領収書</div><a href={expense.receipt_url} target="_blank" rel="noreferrer"><img src={expense.receipt_url} className="receipt-preview" alt="領収書"/></a></div>)}
+      {logs.length>0&&(<div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:13,fontWeight:600,marginBottom:12}}>承認履歴</div>{logs.map(l=>(<div className="log-item" key={l.id}><div className="log-avatar">{l.profiles?.name?.[0]}</div><div className="log-content"><div className="log-meta"><span style={{fontWeight:600,color:'#374151'}}>{l.profiles?.name}</span>{' · '}<span className={`action-${l.action}`}>{l.action==='approve'?'承認':l.action==='reject'?'却下':'申請'}</span></div>{l.comment&&<div className="log-comment">{l.comment}</div>}</div></div>))}</div>)}
+      {(canApprove||canSubmit||canEdit||canDelete)&&(<div className="card" style={{padding:16}}>
+        {canApprove&&(<><textarea className="form-input" rows={2} style={{resize:'none',marginBottom:10}} value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメント（任意）"/><div style={{display:'flex',gap:10,marginBottom:10}}><button className="btn btn-danger" style={{flex:1,justifyContent:'center',padding:'12px'}} onClick={()=>doAction('reject')} disabled={loading}>❌ 却下</button><button className="btn btn-success" style={{flex:1,justifyContent:'center',padding:'12px'}} onClick={()=>doAction('approve')} disabled={loading}>✅ 承認</button></div></>)}
+        {canSubmit&&<button className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={()=>doAction('submit')} disabled={loading}>📤 申請する</button>}
+        {canEdit&&(<div style={{display:'flex',gap:10,marginBottom:10}}><button className="btn btn-secondary" style={{flex:1,justifyContent:'center'}} onClick={()=>onEdit(expenseId)}>✏️ 編集</button><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={doDelete}>🗑 削除</button></div>)}
+        {canDelete&&!canEdit&&(<button className="btn btn-danger" style={{width:'100%',justifyContent:'center',padding:'12px'}} onClick={doDelete}>🗑 この申請を削除</button>)}
       </div>)}
     </div>
   );
@@ -367,7 +394,7 @@ function ApprovalPage({profile,onSelect}){
     <div className="page">
       <div className="page-header"><div><div className="page-title">承認待ち</div><div className="page-sub">あなたの承認を待っている申請</div></div></div>
       <div className="table-wrap">
-        {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="empty">✅ 承認待ちの申請はありません</div>:expenses.map(e=>(<div className="table-row" key={e.id} onClick={()=>onSelect(e.id)}><div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{e.title}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>{e.profiles?.name} · {getCat(e.category)} · {fmtDate(e.expense_date)}</div></div><div style={{display:'flex',alignItems:'center',gap:12}}><span style={{fontSize:13,fontWeight:700}}>{fmt(e.amount)}</span><Badge status={e.status}/><span style={{color:'#cbd5e1'}}>›</span></div></div>))}
+        {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="empty">✅ 承認待ちの申請はありません</div>:expenses.map(e=>(<div className="table-row" key={e.id} onClick={()=>onSelect(e.id)}><div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.title}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:2}}>{e.profiles?.name} · {e.expense_date}</div></div><div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0,marginLeft:8}}><span style={{fontSize:13,fontWeight:700}}>{fmt(e.amount)}</span><Badge status={e.status}/></div></div>))}
       </div>
     </div>
   );
@@ -393,11 +420,11 @@ function ReportPage({profile}){
   const arcs=byCat.map(cat=>{const dash=(cat.pct/100)*circ;const el={cat,dash,offset};offset+=dash;return el;});
   return(
     <div className="page">
-      <div className="page-header"><div className="page-title">月次レポート</div><select className="form-input" style={{width:160}} value={month} onChange={e=>setMonth(e.target.value)}>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></div>
+      <div className="page-header"><div className="page-title">月次レポート</div><select className="form-input" style={{width:140,fontSize:13}} value={month} onChange={e=>setMonth(e.target.value)}>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></div>
       {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="empty">この月の承認済み経費はありません</div>:(<>
-        <div className="card" style={{padding:20,marginBottom:14}}><div style={{fontSize:12,color:'#64748b',marginBottom:4}}>承認済み合計</div><div style={{fontSize:30,fontWeight:700}}>{fmt(total)}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>{expenses.length}件</div></div>
-        {byCat.length>0&&(<div className="card" style={{padding:20,marginBottom:14}}><div style={{fontSize:13,fontWeight:600,marginBottom:16}}>カテゴリ別</div><div className="donut-wrap"><svg width="160" height="160">{arcs.map(({cat,dash,offset})=>(<circle key={cat.value} cx={cx} cy={cy} r={r} fill="none" stroke={cat.color} strokeWidth="20" strokeDasharray={`${dash} ${circ-dash}`} strokeDashoffset={-offset}/>))}<text x={cx} y={cy-6} textAnchor="middle" fill="#64748b" fontSize="11">合計</text><text x={cx} y={cy+10} textAnchor="middle" fill="#0f172a" fontSize="13" fontWeight="bold">{new Intl.NumberFormat('ja-JP',{notation:'compact'}).format(total)}円</text></svg><div className="legend">{byCat.map(cat=>(<div className="legend-item" key={cat.value}><div className="legend-dot" style={{background:cat.color}}/><span className="legend-label">{cat.label}</span><span className="legend-pct">{cat.pct}%</span><span className="legend-amt">{fmt(cat.amount)}</span></div>))}</div></div></div>)}
-        <div className="table-wrap"><div className="table-header"><span>明細</span></div>{expenses.sort((a,b)=>new Date(a.expense_date)-new Date(b.expense_date)).map(e=>(<div className="table-row" key={e.id} style={{cursor:'default'}}><div style={{flex:1}}><div style={{fontSize:13}}>{e.title}</div><div style={{fontSize:12,color:'#94a3b8'}}>{getCat(e.category)} · {e.expense_date}</div></div><span style={{fontSize:13,fontWeight:600}}>{fmt(e.amount)}</span></div>))}</div>
+        <div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:12,color:'#64748b',marginBottom:4}}>承認済み合計</div><div style={{fontSize:28,fontWeight:700}}>{fmt(total)}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>{expenses.length}件</div></div>
+        {byCat.length>0&&(<div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:13,fontWeight:600,marginBottom:14}}>カテゴリ別</div><div className="donut-wrap"><svg width="160" height="160">{arcs.map(({cat,dash,offset})=>(<circle key={cat.value} cx={cx} cy={cy} r={r} fill="none" stroke={cat.color} strokeWidth="20" strokeDasharray={`${dash} ${circ-dash}`} strokeDashoffset={-offset}/>))}<text x={cx} y={cy-6} textAnchor="middle" fill="#64748b" fontSize="11">合計</text><text x={cx} y={cy+10} textAnchor="middle" fill="#0f172a" fontSize="13" fontWeight="bold">{new Intl.NumberFormat('ja-JP',{notation:'compact'}).format(total)}円</text></svg><div className="legend">{byCat.map(cat=>(<div className="legend-item" key={cat.value}><div className="legend-dot" style={{background:cat.color}}/><span className="legend-label">{cat.label}</span><span className="legend-pct">{cat.pct}%</span><span className="legend-amt">{fmt(cat.amount)}</span></div>))}</div></div></div>)}
+        <div className="table-wrap">{expenses.sort((a,b)=>new Date(a.expense_date)-new Date(b.expense_date)).map(e=>(<div className="table-row" key={e.id} style={{cursor:'default'}}><div style={{flex:1}}><div style={{fontSize:13}}>{e.title}</div><div style={{fontSize:12,color:'#94a3b8'}}>{getCat(e.category)} · {e.expense_date}</div></div><span style={{fontSize:13,fontWeight:600}}>{fmt(e.amount)}</span></div>))}</div>
       </>)}
     </div>
   );
@@ -410,6 +437,7 @@ function App(){
   const[page,setPage]=useState('dashboard');
   const[selectedId,setSelectedId]=useState(null);
   const[editId,setEditId]=useState(null);
+  const[drawerOpen,setDrawerOpen]=useState(false);
   useEffect(()=>{
     sb.auth.getSession().then(({data:{session}})=>{setUser(session?.user||null);if(session?.user)loadProfile(session.user.id);else setAuthLoading(false);});
     const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{setUser(session?.user||null);if(session?.user)loadProfile(session.user.id);else{setProfile(null);setAuthLoading(false);}});
@@ -417,10 +445,12 @@ function App(){
   },[]);
   async function loadProfile(uid){const{data}=await sb.from('profiles').select('*').eq('id',uid).single();setProfile(data);setAuthLoading(false);}
   async function logout(){await sb.auth.signOut();setPage('dashboard');setSelectedId(null);setEditId(null);}
+  function goPage(p){setPage(p);setSelectedId(null);setEditId(null);setDrawerOpen(false);}
   if(authLoading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'#94a3b8'}}>読み込み中...</div>;
   if(!user||!profile)return<Login/>;
   const isApprover=['manager','office'].includes(profile.role);
-  const navItems=[{key:'dashboard',icon:'🏠',label:'ダッシュボード'},{key:'expenses',icon:'📋',label:'経費一覧'},...(isApprover?[{key:'approvals',icon:'✅',label:'承認待ち'}]:[]),{key:'reports',icon:'📊',label:'レポート'}];
+  const navItems=[{key:'dashboard',icon:'🏠',label:'ホーム'},{key:'expenses',icon:'📋',label:'経費一覧'},...(isApprover?[{key:'approvals',icon:'✅',label:'承認'}]:[]),{key:'reports',icon:'📊',label:'レポート'}];
+  const pageTitles={dashboard:'ダッシュボード',expenses:'経費一覧',approvals:'承認待ち',reports:'月次レポート',detail:'経費詳細',form:editId?'経費を編集':'経費を申請'};
   function renderPage(){
     if(page==='detail'&&selectedId)return<ExpenseDetail profile={profile} expenseId={selectedId} onBack={()=>{setPage('expenses');setSelectedId(null);}} onEdit={id=>{setEditId(id);setPage('form');}}/>;
     if(page==='form')return<ExpenseForm profile={profile} expenseId={editId} onSave={()=>{setPage('expenses');setEditId(null);}} onCancel={()=>{setPage('expenses');setEditId(null);}}/>;
@@ -429,17 +459,33 @@ function App(){
     if(page==='reports')return<ReportPage profile={profile}/>;
     return<Dashboard profile={profile}/>;
   }
+  const SidebarContent=()=>(<>
+    <div className="sidebar-logo"><div className="logo-icon">🧾</div><div><div className="logo-text">うま味経費</div><div className="logo-sub">Expense Manager</div></div></div>
+    <nav>{navItems.map(n=>(<button key={n.key} className={`nav-item ${page===n.key?'active':''}`} onClick={()=>goPage(n.key)}><span>{n.icon}</span>{n.label}</button>))}</nav>
+    <div className="sidebar-user">
+      <div className="user-info"><div className="user-avatar">{profile.name[0]}</div><div><div className="user-name">{profile.name}</div><span className={`role-badge ${ROLE_BADGE[profile.role]||'role-staff'}`}>{ROLE_LABELS[profile.role]||profile.role}</span></div></div>
+      <button className="logout-btn" onClick={logout}>🚪 ログアウト</button>
+    </div>
+  </>);
   return(
     <div className="app">
-      <aside className="sidebar">
-        <div className="sidebar-logo"><div className="logo-icon">🧾</div><div><div className="logo-text">うま味経費</div><div className="logo-sub">Expense Manager</div></div></div>
-        <nav>{navItems.map(n=>(<button key={n.key} className={`nav-item ${page===n.key?'active':''}`} onClick={()=>{setPage(n.key);setSelectedId(null);setEditId(null);}}><span>{n.icon}</span>{n.label}</button>))}</nav>
-        <div className="sidebar-user">
-          <div className="user-info"><div className="user-avatar">{profile.name[0]}</div><div><div className="user-name">{profile.name}</div><span className={`role-badge ${ROLE_BADGE[profile.role]||'role-staff'}`}>{ROLE_LABELS[profile.role]||profile.role}</span></div></div>
-          <button className="logout-btn" onClick={logout}>🚪 ログアウト</button>
+      <aside className="sidebar"><SidebarContent/></aside>
+      <div className={`sidebar-overlay ${drawerOpen?'open':''}`} onClick={()=>setDrawerOpen(false)}/>
+      <div className={`sidebar-drawer ${drawerOpen?'open':''}`}><SidebarContent/></div>
+      <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+        <div className="mobile-header">
+          <button className="hamburger" onClick={()=>setDrawerOpen(true)}>☰</button>
+          <span className="mobile-header-title">{pageTitles[page]||'うま味経費'}</span>
+          <div style={{width:32}}/>
         </div>
-      </aside>
-      <main className="main">{renderPage()}</main>
+        <main className="main">{renderPage()}</main>
+      </div>
+      <nav className="bottom-nav">
+        <div className="bottom-nav-items">
+          {navItems.map(n=>(<button key={n.key} className={`bottom-nav-item ${page===n.key?'active':''}`} onClick={()=>goPage(n.key)}><span>{n.icon}</span><span>{n.label}</span></button>))}
+        </div>
+      </nav>
+      {profile.role==='staff'&&page!=='form'&&(<button className="fab" onClick={()=>{setEditId(null);setPage('form');}}>＋</button>)}
     </div>
   );
 }
