@@ -321,11 +321,16 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
     await sb.from('approval_logs').insert({expense_id:expenseId,actor_id:profile.id,action,comment,from_status:expense.status,to_status:newStatus});
     setComment('');await loadData();setLoading(false);
   }
-  async function doDelete(){if(!confirm('削除しますか？'))return;await sb.from('expenses').delete().eq('id',expenseId);onBack();}
+  async function doDelete(){
+    if(!confirm('この申請を削除しますか？'))return;
+    await sb.from('expenses').delete().eq('id',expenseId);
+    onBack();
+  }
   if(!expense)return<div className="empty">読み込み中...</div>;
   const canApprove=(profile.role==='manager'&&expense.status==='pending_manager')||(profile.role==='office'&&expense.status==='pending_office');
   const canSubmit=profile.role==='staff'&&expense.status==='draft';
   const canEdit=profile.role==='staff'&&['draft','rejected'].includes(expense.status)&&expense.user_id===profile.id;
+  const canDelete=['manager','office'].includes(profile.role);
   const steps=[{label:'現場',role:'staff',active:expense.status==='draft',done:expense.status!=='draft'},{label:'マネージャー',role:'manager',active:expense.status==='pending_manager',done:['pending_office','approved'].includes(expense.status)},{label:'事務所',role:'office',active:expense.status==='pending_office',done:expense.status==='approved'}];
   return(
     <div className="page">
@@ -343,10 +348,11 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
       </div>
       {expense.receipt_url&&(<div className="card" style={{padding:16,marginBottom:14}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:8}}>領収書</div><a href={expense.receipt_url} target="_blank" rel="noreferrer"><img src={expense.receipt_url} className="receipt-preview" alt="領収書"/></a></div>)}
       {logs.length>0&&(<div className="card" style={{padding:20,marginBottom:14}}><div style={{fontSize:13,fontWeight:600,marginBottom:14}}>承認履歴</div>{logs.map(l=>(<div className="log-item" key={l.id}><div className="log-avatar">{l.profiles?.name?.[0]}</div><div className="log-content"><div className="log-meta"><span style={{fontWeight:600,color:'#374151'}}>{l.profiles?.name}</span>{' · '}<span className={`action-${l.action}`}>{l.action==='approve'?'承認':l.action==='reject'?'却下':'申請'}</span>{' · '}{fmtDate(l.created_at)}</div>{l.comment&&<div className="log-comment">{l.comment}</div>}</div></div>))}</div>)}
-      {(canApprove||canSubmit||canEdit)&&(<div className="card" style={{padding:20}}>
-        {canApprove&&(<><textarea className="form-input" rows={2} style={{resize:'none',marginBottom:12}} value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメント（任意）"/><div style={{display:'flex',gap:10}}><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={()=>doAction('reject')} disabled={loading}>❌ 却下</button><button className="btn btn-success" style={{flex:1,justifyContent:'center'}} onClick={()=>doAction('approve')} disabled={loading}>✅ 承認</button></div></>)}
-        {canSubmit&&<button className="btn btn-primary" style={{width:'100%',justifyContent:'center'}} onClick={()=>doAction('submit')} disabled={loading}>📤 申請する</button>}
-        {canEdit&&(<div style={{display:'flex',gap:10,marginTop:canSubmit?12:0,paddingTop:canSubmit?12:0,borderTop:canSubmit?'1px solid #f1f5f9':'none'}}><button className="btn btn-secondary" style={{flex:1,justifyContent:'center'}} onClick={()=>onEdit(expenseId)}>✏️ 編集</button><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={doDelete}>🗑 削除</button></div>)}
+      {(canApprove||canSubmit||canEdit||canDelete)&&(<div className="card" style={{padding:20}}>
+        {canApprove&&(<><textarea className="form-input" rows={2} style={{resize:'none',marginBottom:12}} value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメント（任意）"/><div style={{display:'flex',gap:10,marginBottom:12}}><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={()=>doAction('reject')} disabled={loading}>❌ 却下</button><button className="btn btn-success" style={{flex:1,justifyContent:'center'}} onClick={()=>doAction('approve')} disabled={loading}>✅ 承認</button></div></>)}
+        {canSubmit&&<button className="btn btn-primary" style={{width:'100%',justifyContent:'center',marginBottom:12}} onClick={()=>doAction('submit')} disabled={loading}>📤 申請する</button>}
+        {canEdit&&(<div style={{display:'flex',gap:10,marginBottom:12}}><button className="btn btn-secondary" style={{flex:1,justifyContent:'center'}} onClick={()=>onEdit(expenseId)}>✏️ 編集</button><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={doDelete}>🗑 削除</button></div>)}
+        {canDelete&&!canEdit&&(<button className="btn btn-danger" style={{width:'100%',justifyContent:'center'}} onClick={doDelete}>🗑 この申請を削除</button>)}
       </div>)}
     </div>
   );
