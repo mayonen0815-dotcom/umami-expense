@@ -264,7 +264,7 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
   function getFiltered(){return expenses.filter(e=>{const ms=!search||e.title.toLowerCase().includes(search.toLowerCase())||e.profiles?.name?.toLowerCase().includes(search.toLowerCase());const mf=!statusFilter||e.status===statusFilter;const mp=!personFilter||e.profiles?.name===personFilter;const mm=!monthFilter||e.expense_date?.startsWith(monthFilter);const mc=!companyFilter||e.company===companyFilter;return ms&&mf&&mp&&mm&&mc;});}
   const filtered=getFiltered();
   const isOffice=profile.role==='office';
-  const showGrouping=isOffice&&(!statusFilter||statusFilter==='pending_office');
+  const showGrouping=(!statusFilter||statusFilter==='pending_office');
   const pendingItems=showGrouping?filtered.filter(e=>e.status==='pending_office'):[];
   const otherItems=showGrouping?filtered.filter(e=>e.status!=='pending_office'):filtered;
   const groups={};
@@ -292,14 +292,14 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     </div>
     {loading?<div className="table-wrap"><div className="empty">読み込み中...</div></div>:(<>
       {showGrouping&&Object.keys(groups).length>0&&(<>
-        <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同日申請はまとめて処理できます）</div>
+        <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同日申請はまとめて表示されます）</div>
         {Object.entries(groups).map(([key,group])=>{
           const total=group.items.reduce((s,e)=>s+e.amount,0);
           const isBundling=bundlingKey===group.items[0].id;
           return(<div className="batch-card" key={key}>
             <div className="batch-card-header">
               <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ {fmtDate(group.day)}申請（{group.items.length}件・{fmt(total)}）</span>
-              <button className="btn btn-warning btn-sm" onClick={()=>handleBundleGroup(group.items)} disabled={isBundling}>{isBundling?'PDF作成中...':group.items.length>1?'📄 まとめて承認中へ':'📄 承認中へ'}</button>
+              {isOffice&&<button className="btn btn-warning btn-sm" onClick={()=>handleBundleGroup(group.items)} disabled={isBundling}>{isBundling?'PDF作成中...':group.items.length>1?'📄 まとめて承認中へ':'📄 承認中へ'}</button>}
             </div>
             <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
           </div>);
