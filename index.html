@@ -256,13 +256,32 @@ function Dashboard({profile,company}){
 }
 
 function ExpenseList({profile,company,onSelect,onNew,onBulk}){
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const[statusFilter,setStatusFilter]=useState('');const[personFilter,setPersonFilter]=useState('');const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState(company||'');
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const[statusFilter,setStatusFilter]=useState('');const[personFilter,setPersonFilter]=useState('');const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState(company||'');const[bundlingKey,setBundlingKey]=useState(null);
   useEffect(()=>{loadData()},[]);
   async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(company)q=q.eq('company',company);const{data}=await q.order('created_at',{ascending:false});setExpenses(data||[]);setLoading(false);}
   const personList=[...new Set(expenses.map(e=>e.profiles?.name).filter(Boolean))];
   const monthList=[...new Set(expenses.map(e=>e.expense_date?.slice(0,7)).filter(Boolean))].sort().reverse();
   function getFiltered(){return expenses.filter(e=>{const ms=!search||e.title.toLowerCase().includes(search.toLowerCase())||e.profiles?.name?.toLowerCase().includes(search.toLowerCase());const mf=!statusFilter||e.status===statusFilter;const mp=!personFilter||e.profiles?.name===personFilter;const mm=!monthFilter||e.expense_date?.startsWith(monthFilter);const mc=!companyFilter||e.company===companyFilter;return ms&&mf&&mp&&mm&&mc;});}
   const filtered=getFiltered();
+  const isOffice=profile.role==='office';
+  const showGrouping=isOffice&&(!statusFilter||statusFilter==='pending_office');
+  const pendingItems=showGrouping?filtered.filter(e=>e.status==='pending_office'):[];
+  const otherItems=showGrouping?filtered.filter(e=>e.status!=='pending_office'):filtered;
+  const groups={};
+  pendingItems.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
+  async function handleBundleGroup(items){
+    setBundlingKey(items[0].id);
+    try{
+      const pdf_url=await generateAndUploadBatchPDF(items,profile.id);
+      const{data:batch,error:bErr}=await sb.from('pdf_batches').insert({company:items[0].company,created_by:profile.id,pdf_url,status:'processing'}).select().single();
+      if(bErr)throw bErr;
+      const ids=items.map(e=>e.id);
+      await sb.from('expenses').update({status:'processing',batch_id:batch.id}).in('id',ids);
+      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'process',comment:`${items.length}件まとめPDF（同日申請）`,from_status:'pending_office',to_status:'processing'})));
+      await loadData();
+    }catch(e){alert('まとめPDFの作成に失敗しました: '+e.message);}
+    setBundlingKey(null);
+  }
   return(<div className="page"><div className="page-header"><div className="page-title">経費一覧</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{profile.role==='staff'&&<button className="btn btn-secondary" onClick={onBulk}>📷 一括申請</button>}{profile.role==='staff'&&<button className="btn btn-primary" onClick={onNew}>＋ 申請</button>}</div></div>
     <div className="filter-row">
       <div className="search-wrap"><span className="search-icon">🔍</span><input className="form-input search-input" placeholder="検索..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
@@ -271,17 +290,33 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
       <select className="form-input" style={{width:95,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{monthList.map(m=><option key={m} value={m}>{m.replace('-','年')}月</option>)}</select>
       {!company&&(<select className="form-input" style={{width:110,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select>)}
     </div>
-    <div className="table-wrap">
-      {loading?<div className="empty">読み込み中...</div>:filtered.length===0?<div className="empty">申請がありません</div>:filtered.map(e=>(
-        <div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>
-          <span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span>
-          <span className="expense-name">{e.profiles?.name||''}</span>
-          <span className="expense-amount">{fmt(e.amount)}</span>
-          <Badge status={e.status}/>
-          <button className="btn btn-secondary btn-sm" style={{flexShrink:0}} onClick={ev=>{ev.stopPropagation();generatePDF(e);}}>📄 PDF</button>
-        </div>
-      ))}
-    </div>
+    {loading?<div className="table-wrap"><div className="empty">読み込み中...</div></div>:(<>
+      {showGrouping&&Object.keys(groups).length>0&&(<>
+        <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同日申請はまとめて処理できます）</div>
+        {Object.entries(groups).map(([key,group])=>{
+          const total=group.items.reduce((s,e)=>s+e.amount,0);
+          const isBundling=bundlingKey===group.items[0].id;
+          return(<div className="batch-card" key={key}>
+            <div className="batch-card-header">
+              <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ {fmtDate(group.day)}申請（{group.items.length}件・{fmt(total)}）</span>
+              <button className="btn btn-warning btn-sm" onClick={()=>handleBundleGroup(group.items)} disabled={isBundling}>{isBundling?'PDF作成中...':group.items.length>1?'📄 まとめて承認中へ':'📄 承認中へ'}</button>
+            </div>
+            <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
+          </div>);
+        })}
+      </>)}
+      <div className="table-wrap">
+        {otherItems.length===0?(showGrouping&&Object.keys(groups).length>0?null:<div className="empty">申請がありません</div>):otherItems.map(e=>(
+          <div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>
+            <span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span>
+            <span className="expense-name">{e.profiles?.name||''}</span>
+            <span className="expense-amount">{fmt(e.amount)}</span>
+            <Badge status={e.status}/>
+            <button className="btn btn-secondary btn-sm" style={{flexShrink:0}} onClick={ev=>{ev.stopPropagation();generatePDF(e);}}>📄 PDF</button>
+          </div>
+        ))}
+      </div>
+    </>)}
   </div>);
 }
 
@@ -334,36 +369,33 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
 }
 
 function ApprovalPage({profile,onSelect}){
-  const[expenses,setExpenses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[selected,setSelected]=useState({});const[bundling,setBundling]=useState(false);
+  const[expenses,setExpenses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[bundlingKey,setBundlingKey]=useState(null);
   useEffect(()=>{loadData()},[]);
   async function loadData(){
     const{data}=await sb.from('expenses').select('*,profiles(name)').in('status',['pending_office','processing']).order('created_at',{ascending:true});
     setExpenses(data||[]);
     const batchIds=[...new Set((data||[]).filter(e=>e.batch_id).map(e=>e.batch_id))];
     if(batchIds.length){const{data:bd}=await sb.from('pdf_batches').select('*').in('id',batchIds);setBatches(bd||[]);}else{setBatches([]);}
-    setSelected({});
     setLoading(false);
   }
   const pending=expenses.filter(e=>e.status==='pending_office');
   const processing=expenses.filter(e=>e.status==='processing');
+  const pendingGroups={};
+  pending.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(pendingGroups[key]=pendingGroups[key]||{company:e.company,day,items:[]}).items.push(e);});
   const processingByBatch={};
   processing.forEach(e=>{const k=e.batch_id||'nobatch';(processingByBatch[k]=processingByBatch[k]||[]).push(e);});
-  function toggleSelect(id){setSelected(s=>({...s,[id]:!s[id]}));}
-  const selectedIds=Object.keys(selected).filter(id=>selected[id]);
-  async function handleBundle(){
-    const items=pending.filter(e=>selectedIds.includes(e.id));
-    if(items.length===0)return;
-    setBundling(true);
+  async function handleBundleGroup(items){
+    setBundlingKey(items[0].id);
     try{
       const pdf_url=await generateAndUploadBatchPDF(items,profile.id);
       const{data:batch,error:bErr}=await sb.from('pdf_batches').insert({company:items[0].company,created_by:profile.id,pdf_url,status:'processing'}).select().single();
       if(bErr)throw bErr;
       const ids=items.map(e=>e.id);
       await sb.from('expenses').update({status:'processing',batch_id:batch.id}).in('id',ids);
-      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'process',comment:`${items.length}件まとめPDF`,from_status:'pending_office',to_status:'processing'})));
+      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'process',comment:`${items.length}件まとめPDF（同日申請）`,from_status:'pending_office',to_status:'processing'})));
       await loadData();
     }catch(e){alert('まとめPDFの作成に失敗しました: '+e.message);}
-    setBundling(false);
+    setBundlingKey(null);
   }
   async function approveBatch(batchId,items){
     setLoading(true);
@@ -385,10 +417,19 @@ function ApprovalPage({profile,onSelect}){
   return(<div className="page"><div className="page-header"><div><div className="page-title">承認中</div><div className="page-sub">対応が必要な申請</div></div></div>
     {loading&&<div className="empty">読み込み中...</div>}
     {!loading&&expenses.length===0&&<div className="card"><div className="empty">✅ 対応が必要な申請はありません</div></div>}
-    {pending.length>0&&(<>
-      <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（{pending.length}件）</div>
-      {selectedIds.length>0&&(<div className="select-bar"><span className="select-bar-text">{selectedIds.length}件選択中</span><button className="btn btn-warning btn-sm" onClick={handleBundle} disabled={bundling}>{bundling?'PDF作成中...':'📄 選択した申請をPDFにまとめて承認中へ'}</button></div>)}
-      <div className="table-wrap" style={{marginBottom:16}}>{pending.map(e=>(<div className="expense-row" key={e.id}><input type="checkbox" className="checkbox" checked={!!selected[e.id]} onChange={()=>toggleSelect(e.id)}/><span className="expense-company" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.company?.replace('株式会社','')||'—'}</span><span className="expense-name" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.profiles?.name||''}</span><span className="expense-title" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
+    {Object.keys(pendingGroups).length>0&&(<>
+      <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同日申請は自動でまとめられます）</div>
+      {Object.entries(pendingGroups).map(([key,group])=>{
+        const total=group.items.reduce((s,e)=>s+e.amount,0);
+        const isBundling=bundlingKey===group.items[0].id;
+        return(<div className="batch-card" key={key}>
+          <div className="batch-card-header">
+            <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ {fmtDate(group.day)}申請（{group.items.length}件・{fmt(total)}）</span>
+            <button className="btn btn-warning btn-sm" onClick={()=>handleBundleGroup(group.items)} disabled={isBundling}>{isBundling?'PDF作成中...':group.items.length>1?'📄 まとめて承認中へ':'📄 承認中へ'}</button>
+          </div>
+          <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
+        </div>);
+      })}
     </>)}
     {Object.keys(processingByBatch).length>0&&(<>
       <div style={{fontSize:13,fontWeight:600,color:'#1d4ed8',marginBottom:8}}>🔄 承認中</div>
