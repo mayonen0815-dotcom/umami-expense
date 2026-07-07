@@ -256,33 +256,38 @@ function Dashboard({profile,company}){
 }
 
 function ExpenseList({profile,company,onSelect,onNew,onBulk}){
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const[statusFilter,setStatusFilter]=useState('');const[personFilter,setPersonFilter]=useState('');const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState(company||'');const[bundlingKey,setBundlingKey]=useState(null);const[draftSelected,setDraftSelected]=useState({});const[submittingDrafts,setSubmittingDrafts]=useState(false);
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const[statusFilter,setStatusFilter]=useState('');const[personFilter,setPersonFilter]=useState('');const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState(company||'');const[bundlingKey,setBundlingKey]=useState(null);const[selectMode,setSelectMode]=useState(false);const[selected,setSelected]=useState({});const[submitting,setSubmitting]=useState(false);
   useEffect(()=>{loadData()},[]);
-  async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(company)q=q.eq('company',company);const{data}=await q.order('created_at',{ascending:false});setExpenses(data||[]);setDraftSelected({});setLoading(false);}
+  async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(company)q=q.eq('company',company);const{data}=await q.order('created_at',{ascending:false});setExpenses(data||[]);setSelected({});setLoading(false);}
   const personList=[...new Set(expenses.map(e=>e.profiles?.name).filter(Boolean))];
   const monthList=[...new Set(expenses.map(e=>e.expense_date?.slice(0,7)).filter(Boolean))].sort().reverse();
   function getFiltered(){return expenses.filter(e=>{const ms=!search||e.title.toLowerCase().includes(search.toLowerCase())||e.profiles?.name?.toLowerCase().includes(search.toLowerCase());const mf=!statusFilter||e.status===statusFilter;const mp=!personFilter||e.profiles?.name===personFilter;const mm=!monthFilter||e.expense_date?.startsWith(monthFilter);const mc=!companyFilter||e.company===companyFilter;return ms&&mf&&mp&&mm&&mc;});}
   const filtered=getFiltered();
   const isOffice=profile.role==='office';
   const isStaff=profile.role==='staff';
-  const showDraftPicker=isStaff&&(!statusFilter||statusFilter==='draft');
-  const draftItems=showDraftPicker?filtered.filter(e=>e.status==='draft'):[];
+  const submittableStatuses=['draft','rejected'];
   const showGrouping=(!statusFilter||statusFilter==='pending_office');
   const pendingItems=showGrouping?filtered.filter(e=>e.status==='pending_office'):[];
-  const otherItems=filtered.filter(e=>!(showGrouping&&e.status==='pending_office')&&!(showDraftPicker&&e.status==='draft'));
+  const otherItems=filtered.filter(e=>!(showGrouping&&e.status==='pending_office'));
   const groups={};
   pendingItems.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
-  function toggleDraft(id){setDraftSelected(s=>({...s,[id]:!s[id]}));}
-  const selectedDraftIds=Object.keys(draftSelected).filter(id=>draftSelected[id]);
-  async function handleSubmitDrafts(){
-    if(selectedDraftIds.length===0)return;
-    setSubmittingDrafts(true);
+  function toggleSelect(id){setSelected(s=>({...s,[id]:!s[id]}));}
+  const selectedIds=Object.keys(selected).filter(id=>selected[id]);
+  async function handleSubmitSelected(){
+    const items=filtered.filter(e=>selectedIds.includes(e.id));
+    if(items.length===0)return;
+    setSubmitting(true);
     try{
-      await sb.from('expenses').update({status:'pending_office'}).in('id',selectedDraftIds);
-      await sb.from('approval_logs').insert(selectedDraftIds.map(id=>({expense_id:id,actor_id:profile.id,action:'submit',comment:'',from_status:'draft',to_status:'pending_office'})));
+      const pdf_url=await generateAndUploadBatchPDF(items,profile.id);
+      const{data:batch,error:bErr}=await sb.from('pdf_batches').insert({company:items[0].company,created_by:profile.id,pdf_url,status:'processing'}).select().single();
+      if(bErr)throw bErr;
+      const ids=items.map(e=>e.id);
+      await sb.from('expenses').update({status:'processing',batch_id:batch.id}).in('id',ids);
+      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'process',comment:`${items.length}件を経費提出`,from_status:e.status,to_status:'processing'})));
+      setSelectMode(false);
       await loadData();
-    }catch(e){alert('送信に失敗しました: '+e.message);}
-    setSubmittingDrafts(false);
+    }catch(e){alert('経費提出に失敗しました: '+e.message);}
+    setSubmitting(false);
   }
   async function handleBundleGroup(items){
     setBundlingKey(items[0].id);
@@ -297,7 +302,8 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     }catch(e){alert('まとめPDFの作成に失敗しました: '+e.message);}
     setBundlingKey(null);
   }
-  return(<div className="page"><div className="page-header"><div className="page-title">経費一覧</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{profile.role==='staff'&&<button className="btn btn-secondary" onClick={onBulk}>📷 一括申請</button>}{profile.role==='staff'&&<button className="btn btn-primary" onClick={onNew}>＋ 申請</button>}</div></div>
+  return(<div className="page"><div className="page-header"><div className="page-title">経費一覧</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{isStaff&&<button className={selectMode?'btn btn-primary':'btn btn-secondary'} onClick={()=>{setSelectMode(m=>!m);setSelected({});}}>✅ 経費申請</button>}{isStaff&&<button className="btn btn-secondary" onClick={onBulk}>📷 一括申請</button>}{isStaff&&<button className="btn btn-primary" onClick={onNew}>＋ 申請</button>}</div></div>
+    {selectMode&&(<div className="select-bar"><span className="select-bar-text">{selectedIds.length}件選択中（下書き・却下のみ選択できます）</span><button className="btn btn-primary btn-sm" onClick={handleSubmitSelected} disabled={submitting||selectedIds.length===0}>{submitting?'送信中...':'📤 経費提出'}</button></div>)}
     <div className="filter-row">
       <div className="search-wrap"><span className="search-icon">🔍</span><input className="form-input search-input" placeholder="検索..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
       <select className="form-input" style={{width:110,fontSize:13}} value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">全ステータス</option>{Object.entries(STATUS).map(([v,s])=><option key={v} value={v}>{s.label}</option>)}</select>
@@ -306,11 +312,6 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
       {!company&&(<select className="form-input" style={{width:110,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select>)}
     </div>
     {loading?<div className="table-wrap"><div className="empty">読み込み中...</div></div>:(<>
-      {showDraftPicker&&draftItems.length>0&&(<>
-        <div style={{fontSize:13,fontWeight:600,color:'#475569',marginBottom:8}}>📝 下書き（選んで事務所に送れます）</div>
-        {selectedDraftIds.length>0&&(<div className="select-bar"><span className="select-bar-text">{selectedDraftIds.length}件選択中</span><button className="btn btn-primary btn-sm" onClick={handleSubmitDrafts} disabled={submittingDrafts}>{submittingDrafts?'送信中...':'📤 選択した申請を事務所に送る'}</button></div>)}
-        <div className="table-wrap" style={{marginBottom:16}}>{draftItems.map(e=>(<div className="expense-row" key={e.id}><input type="checkbox" className="checkbox" checked={!!draftSelected[e.id]} onChange={()=>toggleDraft(e.id)}/><span className="expense-title" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span><Badge status={e.status}/></div>))}</div>
-      </>)}
       {showGrouping&&Object.keys(groups).length>0&&(<>
         <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同日申請はまとめて表示されます）</div>
         {Object.entries(groups).map(([key,group])=>{
@@ -326,15 +327,18 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
         })}
       </>)}
       <div className="table-wrap">
-        {otherItems.length===0?(((showGrouping&&Object.keys(groups).length>0)||(showDraftPicker&&draftItems.length>0))?null:<div className="empty">申請がありません</div>):otherItems.map(e=>(
-          <div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>
+        {otherItems.length===0?(showGrouping&&Object.keys(groups).length>0?null:<div className="empty">申請がありません</div>):otherItems.map(e=>{
+          const canPick=selectMode&&isStaff&&submittableStatuses.includes(e.status);
+          return(<div className="expense-row" key={e.id} style={{cursor:canPick?'default':'pointer'}} onClick={canPick?undefined:()=>onSelect(e.id)}>
+            {selectMode&&(canPick?<input type="checkbox" className="checkbox" checked={!!selected[e.id]} onChange={()=>toggleSelect(e.id)}/>:<span style={{width:16,display:'inline-block'}}/>)}
             <span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span>
             <span className="expense-name">{e.profiles?.name||''}</span>
+            <span className="expense-title" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.title}</span>
             <span className="expense-amount">{fmt(e.amount)}</span>
             <Badge status={e.status}/>
             <button className="btn btn-secondary btn-sm" style={{flexShrink:0}} onClick={ev=>{ev.stopPropagation();generatePDF(e);}}>📄 PDF</button>
-          </div>
-        ))}
+          </div>);
+        })}
       </div>
     </>)}
   </div>);
@@ -473,34 +477,79 @@ function ApprovalPage({profile,onSelect}){
 }
 
 function ArchivePage({profile}){
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[actingKey,setActingKey]=useState(null);
   useEffect(()=>{loadData()},[monthFilter,companyFilter]);
-  async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)').eq('status','approved');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(monthFilter){const start=monthFilter+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);q=q.gte('expense_date',start).lte('expense_date',end);}if(companyFilter)q=q.eq('company',companyFilter);const{data}=await q.order('expense_date',{ascending:false});
+  async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)').in('status',['processing','approved']);if(profile.role==='staff')q=q.eq('user_id',profile.id);if(monthFilter){const start=monthFilter+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);q=q.gte('expense_date',start).lte('expense_date',end);}if(companyFilter)q=q.eq('company',companyFilter);const{data}=await q.order('expense_date',{ascending:false});
     const batchIds=[...new Set((data||[]).filter(e=>e.batch_id).map(e=>e.batch_id))];
     let batchMap={};
     if(batchIds.length){const{data:bd}=await sb.from('pdf_batches').select('*').in('id',batchIds);(bd||[]).forEach(b=>{batchMap[b.id]=b;});}
     setExpenses((data||[]).map(e=>({...e,_batch:e.batch_id?batchMap[e.batch_id]:null})));
     setLoading(false);}
-  const total=expenses.reduce((s,e)=>s+e.amount,0);
+  async function approveBatch(batchId,items){
+    setActingKey(batchId);
+    await sb.from('pdf_batches').update({status:'approved',approved_at:new Date().toISOString()}).eq('id',batchId);
+    const ids=items.map(e=>e.id);
+    await sb.from('expenses').update({status:'approved'}).in('id',ids);
+    await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:'',from_status:'processing',to_status:'approved'})));
+    await loadData();
+    setActingKey(null);
+  }
+  async function rejectBatch(batchId,items){
+    if(!confirm('この経費を非承認にしますか？（下書きに戻り、現場側で再提出できます）'))return;
+    setActingKey(batchId);
+    await sb.from('pdf_batches').update({status:'rejected'}).eq('id',batchId);
+    const ids=items.map(e=>e.id);
+    await sb.from('expenses').update({status:'rejected',batch_id:null}).in('id',ids);
+    await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'reject',comment:'',from_status:'processing',to_status:'rejected'})));
+    await loadData();
+    setActingKey(null);
+  }
+  const total=expenses.filter(e=>e.status==='approved').reduce((s,e)=>s+e.amount,0);
   const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
   const batched=expenses.filter(e=>e.batch_id);
   const standalone=expenses.filter(e=>!e.batch_id);
   const groups={};
   batched.forEach(e=>{(groups[e.batch_id]=groups[e.batch_id]||[]).push(e);});
-  return(<div className="page"><div className="page-header"><div><div className="page-title">アーカイブ</div><div className="page-sub">承認済みの経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.length>0&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>{expenses.length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
-    {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">承認済みの経費はありません</div></div>:(<>
-      {Object.entries(groups).map(([batchId,items])=>{
-        const b=items[0]._batch;
-        const t=items.reduce((s,e)=>s+e.amount,0);
-        return(<div className="batch-card" key={batchId}>
-          <div className="batch-card-header">
-            <span className="batch-card-title">{items[0].company?.replace('株式会社','')} まとめPDF（{items.length}件・{fmt(t)}）{b?.approved_at?` ／ 承認日 ${fmtDate(b.approved_at)}`:''}</span>
-            {b?.pdf_url&&<a className="btn btn-secondary btn-sm" href={b.pdf_url} target="_blank" rel="noreferrer">📄 PDFを開く</a>}
-          </div>
-          <div className="batch-card-body">{items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
-        </div>);
-      })}
-      {standalone.length>0&&(<div className="table-wrap">{standalone.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span><button className="btn btn-secondary btn-sm" onClick={()=>generatePDF(e)}>📄 PDF</button></div>))}</div>)}
+  const processingGroups=Object.entries(groups).filter(([,items])=>items[0].status==='processing');
+  const approvedGroups=Object.entries(groups).filter(([,items])=>items[0].status==='approved');
+  return(<div className="page"><div className="page-header"><div><div className="page-title">アーカイブ</div><div className="page-sub">提出済み・承認済みの経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.some(e=>e.status==='approved')&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認済み {expenses.filter(e=>e.status==='approved').length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
+    {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">まだ提出された経費はありません</div></div>:(<>
+      {processingGroups.length>0&&(<>
+        <div style={{fontSize:13,fontWeight:600,color:'#1d4ed8',marginBottom:8}}>🔄 承認待ち</div>
+        {processingGroups.map(([batchId,items])=>{
+          const b=items[0]._batch;
+          const t=items.reduce((s,e)=>s+e.amount,0);
+          const acting=actingKey===batchId;
+          return(<div className="batch-card" key={batchId}>
+            <div className="batch-card-header">
+              <span className="batch-card-title">{items[0].company?.replace('株式会社','')} まとめPDF（{items.length}件・{fmt(t)}）</span>
+              <div style={{display:'flex',gap:8}}>
+                {b?.pdf_url&&<a className="btn btn-secondary btn-sm" href={b.pdf_url} target="_blank" rel="noreferrer">📄 PDFを開く</a>}
+                {profile.role==='office'&&(<>
+                  <button className="btn btn-danger btn-sm" onClick={()=>rejectBatch(batchId,items)} disabled={acting}>❌ 非承認</button>
+                  <button className="btn btn-success btn-sm" onClick={()=>approveBatch(batchId,items)} disabled={acting}>✅ 承認</button>
+                </>)}
+              </div>
+            </div>
+            <div className="batch-card-body">{items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
+          </div>);
+        })}
+      </>)}
+      {approvedGroups.length>0&&(<>
+        <div style={{fontSize:13,fontWeight:600,color:'#15803d',marginBottom:8}}>✅ 承認済み</div>
+        {approvedGroups.map(([batchId,items])=>{
+          const b=items[0]._batch;
+          const t=items.reduce((s,e)=>s+e.amount,0);
+          return(<div className="batch-card" key={batchId}>
+            <div className="batch-card-header">
+              <span className="batch-card-title">{items[0].company?.replace('株式会社','')} まとめPDF（{items.length}件・{fmt(t)}）{b?.approved_at?` ／ 承認日 ${fmtDate(b.approved_at)}`:''}</span>
+              {b?.pdf_url&&<a className="btn btn-secondary btn-sm" href={b.pdf_url} target="_blank" rel="noreferrer">📄 PDFを開く</a>}
+            </div>
+            <div className="batch-card-body">{items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
+          </div>);
+        })}
+      </>)}
+      {standalone.length>0&&(<div className="table-wrap">{standalone.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span><Badge status={e.status}/><button className="btn btn-secondary btn-sm" onClick={()=>generatePDF(e)}>📄 PDF</button></div>))}</div>)}
     </>)}
   </div>);
 }
