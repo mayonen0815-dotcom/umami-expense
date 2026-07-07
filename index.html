@@ -189,6 +189,18 @@ function generatePDF(expense){
   window.open(URL.createObjectURL(blob),'_blank');
 }
 
+function printGroupPDF(items){
+  const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
+  const total=items.reduce((s,e)=>s+e.amount,0);
+  const company=items[0]?.company||'';
+  const rows=items.map(e=>`<tr><td>${e.expense_date}</td><td>${e.profiles?.name||''}</td><td>${getCat(e.category)} ${e.title}</td><td style="text-align:right">¥${e.amount.toLocaleString()}</td><td>${e.description||''}</td></tr>`).join('');
+  const withReceipt=items.filter(e=>e.receipt_url);
+  const receiptItems=withReceipt.map(e=>`<div class="receipt-item"><img src="${e.receipt_url}" alt="領収書"/><p>${e.expense_date} ${e.profiles?.name||''} ${e.title}</p></div>`).join('');
+  const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><style>body{font-family:'MS Gothic','Hiragino Sans',sans-serif;font-size:11px;margin:20px}h2{text-align:center;font-size:15px;margin-bottom:14px}.header-row{display:flex;justify-content:space-between;margin-bottom:10px}.total-box{border:2px solid #000;padding:4px 14px;font-size:13px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #000;padding:4px 6px}th{background:#d9d9d9;text-align:center}.receipt-section{margin-top:20px;border-top:2px solid #000;padding-top:14px}.receipt-title{font-size:13px;font-weight:bold;margin-bottom:12px}.receipt-grid{display:flex;flex-wrap:wrap;gap:10px}.receipt-item{text-align:center}.receipt-item img{width:180px;height:140px;object-fit:cover;border:1px solid #000;display:block}.receipt-item p{font-size:9px;margin-top:3px;width:180px}@media print{body{margin:0}}</style></head><body><h2>UMAMI経費精算（まとめ）</h2><div class="header-row"><div>申請日：${today}${company?` ／ ${company}`:''}</div><div class="total-box">¥${total.toLocaleString()}（${items.length}件）</div></div><table><thead><tr><th style="width:90px">日付</th><th>申請者</th><th>適用</th><th style="width:80px">金額</th><th>備考</th></tr></thead><tbody>${rows}</tbody></table>${withReceipt.length?`<div class="receipt-section"><div class="receipt-title">領収書（${withReceipt.length}件）</div><div class="receipt-grid">${receiptItems}</div></div>`:''}<script>window.onload=function(){window.print()}<\/script></body></html>`;
+  const blob=new Blob([html],{type:'text/html;charset=utf-8;'});
+  window.open(URL.createObjectURL(blob),'_blank');
+}
+
 function downloadBlob(blob,filename){
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -376,80 +388,36 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
 }
 
 function ArchivePage({profile}){
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[actingKey,setActingKey]=useState(null);
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');
   useEffect(()=>{loadData()},[monthFilter,companyFilter]);
-  async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)').in('status',['processing','approved']);if(profile.role==='staff')q=q.eq('user_id',profile.id);if(monthFilter){const start=monthFilter+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);q=q.gte('expense_date',start).lte('expense_date',end);}if(companyFilter)q=q.eq('company',companyFilter);const{data}=await q.order('expense_date',{ascending:false});
-    const batchIds=[...new Set((data||[]).filter(e=>e.batch_id).map(e=>e.batch_id))];
-    let batchMap={};
-    if(batchIds.length){const{data:bd}=await sb.from('pdf_batches').select('*').in('id',batchIds);(bd||[]).forEach(b=>{batchMap[b.id]=b;});}
-    setExpenses((data||[]).map(e=>({...e,_batch:e.batch_id?batchMap[e.batch_id]:null})));
-    setLoading(false);}
-  async function approveBatch(batchId,items){
-    setActingKey(batchId);
-    await sb.from('pdf_batches').update({status:'approved',approved_at:new Date().toISOString()}).eq('id',batchId);
-    const ids=items.map(e=>e.id);
-    await sb.from('expenses').update({status:'approved'}).in('id',ids);
-    await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:'',from_status:'processing',to_status:'approved'})));
-    await loadData();
-    setActingKey(null);
+  async function loadData(){
+    setLoading(true);
+    let q=sb.from('expenses').select('*,profiles(name)').eq('status','approved');
+    if(profile.role==='staff')q=q.eq('user_id',profile.id);
+    if(monthFilter){const start=monthFilter+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);q=q.gte('expense_date',start).lte('expense_date',end);}
+    if(companyFilter)q=q.eq('company',companyFilter);
+    const{data}=await q.order('expense_date',{ascending:false});
+    setExpenses(data||[]);
+    setLoading(false);
   }
-  async function rejectBatch(batchId,items){
-    if(!confirm('この経費を非承認にしますか？（下書きに戻り、現場側で再提出できます）'))return;
-    setActingKey(batchId);
-    await sb.from('pdf_batches').update({status:'rejected'}).eq('id',batchId);
-    const ids=items.map(e=>e.id);
-    await sb.from('expenses').update({status:'rejected',batch_id:null}).in('id',ids);
-    await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'reject',comment:'',from_status:'processing',to_status:'rejected'})));
-    await loadData();
-    setActingKey(null);
-  }
-  const total=expenses.filter(e=>e.status==='approved').reduce((s,e)=>s+e.amount,0);
+  const total=expenses.reduce((s,e)=>s+e.amount,0);
   const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
-  const batched=expenses.filter(e=>e.batch_id);
-  const standalone=expenses.filter(e=>!e.batch_id);
   const groups={};
-  batched.forEach(e=>{(groups[e.batch_id]=groups[e.batch_id]||[]).push(e);});
-  const processingGroups=Object.entries(groups).filter(([,items])=>items[0].status==='processing');
-  const approvedGroups=Object.entries(groups).filter(([,items])=>items[0].status==='approved');
-  return(<div className="page"><div className="page-header"><div><div className="page-title">アーカイブ</div><div className="page-sub">提出済み・承認済みの経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.some(e=>e.status==='approved')&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認済み {expenses.filter(e=>e.status==='approved').length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
-    {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">まだ提出された経費はありません</div></div>:(<>
-      {processingGroups.length>0&&(<>
-        <div style={{fontSize:13,fontWeight:600,color:'#1d4ed8',marginBottom:8}}>🔄 承認待ち</div>
-        {processingGroups.map(([batchId,items])=>{
-          const b=items[0]._batch;
-          const t=items.reduce((s,e)=>s+e.amount,0);
-          const acting=actingKey===batchId;
-          return(<div className="batch-card" key={batchId}>
-            <div className="batch-card-header">
-              <span className="batch-card-title">{items[0].company?.replace('株式会社','')} まとめPDF（{items.length}件・{fmt(t)}）</span>
-              <div style={{display:'flex',gap:8}}>
-                {b?.pdf_url&&<a className="btn btn-secondary btn-sm" href={b.pdf_url} target="_blank" rel="noreferrer">📄 PDFを開く</a>}
-                {profile.role==='office'&&(<>
-                  <button className="btn btn-danger btn-sm" onClick={()=>rejectBatch(batchId,items)} disabled={acting}>❌ 非承認</button>
-                  <button className="btn btn-success btn-sm" onClick={()=>approveBatch(batchId,items)} disabled={acting}>✅ 承認</button>
-                </>)}
-              </div>
-            </div>
-            <div className="batch-card-body">{items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
-          </div>);
-        })}
-      </>)}
-      {approvedGroups.length>0&&(<>
-        <div style={{fontSize:13,fontWeight:600,color:'#15803d',marginBottom:8}}>✅ 承認済み</div>
-        {approvedGroups.map(([batchId,items])=>{
-          const b=items[0]._batch;
-          const t=items.reduce((s,e)=>s+e.amount,0);
-          return(<div className="batch-card" key={batchId}>
-            <div className="batch-card-header">
-              <span className="batch-card-title">{items[0].company?.replace('株式会社','')} まとめPDF（{items.length}件・{fmt(t)}）{b?.approved_at?` ／ 承認日 ${fmtDate(b.approved_at)}`:''}</span>
-              {b?.pdf_url&&<a className="btn btn-secondary btn-sm" href={b.pdf_url} target="_blank" rel="noreferrer">📄 PDFを開く</a>}
-            </div>
-            <div className="batch-card-body">{items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
-          </div>);
-        })}
-      </>)}
-      {standalone.length>0&&(<div className="table-wrap">{standalone.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span><Badge status={e.status}/><button className="btn btn-secondary btn-sm" onClick={()=>generatePDF(e)}>📄 PDF</button></div>))}</div>)}
-    </>)}
+  expenses.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
+  return(<div className="page"><div className="page-header"><div><div className="page-title">アーカイブ</div><div className="page-sub">承認済みの経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.length>0&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認済み {expenses.length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
+    {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">承認済みの経費はありません</div></div>:(
+      Object.entries(groups).map(([key,group])=>{
+        const t=group.items.reduce((s,e)=>s+e.amount,0);
+        const names=[...new Set(group.items.map(e=>e.profiles?.name).filter(Boolean))].join('・');
+        return(<div className="batch-card" key={key}>
+          <div className="batch-card-header">
+            <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'}｜{names}｜{fmt(t)}</span>
+            <button className="btn btn-secondary btn-sm" onClick={()=>printGroupPDF(group.items)}>📄 PDF（まとめ）</button>
+          </div>
+          <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
+        </div>);
+      })
+    )}
   </div>);
 }
 
