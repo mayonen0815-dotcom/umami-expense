@@ -190,13 +190,13 @@ function generatePDF(expense){
   window.open(URL.createObjectURL(blob),'_blank');
 }
 
-function buildBatchHTML(expenses){
+function buildBatchHTML(expenses,imageMap){
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const total=expenses.reduce((s,e)=>s+e.amount,0);
   const company=expenses[0]?.company||'';
   const rows=expenses.map(e=>`<tr><td>${e.expense_date}</td><td>${e.profiles?.name||''}</td><td>${getCat(e.category)} ${e.title}</td><td style="text-align:right">¥${e.amount.toLocaleString()}</td><td>${e.description||''}</td></tr>`).join('');
-  const withReceipt=expenses.filter(e=>e.receipt_url);
-  const receiptItems=withReceipt.map(e=>`<div class="r-item"><img src="${e.receipt_url}" crossorigin="anonymous"/><p>${e.expense_date} ${e.profiles?.name||''} ${e.title}</p></div>`).join('');
+  const withReceipt=expenses.filter(e=>imageMap&&imageMap[e.id]);
+  const receiptItems=withReceipt.map(e=>`<div class="r-item"><img src="${imageMap[e.id]}"/><p>${e.expense_date} ${e.profiles?.name||''} ${e.title}</p></div>`).join('');
   return `<div style="font-family:'Hiragino Sans',sans-serif;font-size:11px;padding:14px;width:760px;color:#000;background:#fff;">
     <h2 style="text-align:center;font-size:16px;margin-bottom:14px">UMAMI経費精算（まとめ）</h2>
     <div style="display:flex;justify-content:space-between;margin-bottom:10px">
@@ -214,17 +214,39 @@ function buildBatchHTML(expenses){
   </div>`;
 }
 
+function fetchImageAsDataURL(url,timeoutMs=8000){
+  return new Promise(resolve=>{
+    const controller=new AbortController();
+    const timer=setTimeout(()=>{controller.abort();resolve(null);},timeoutMs);
+    fetch(url,{signal:controller.signal}).then(res=>{
+      if(!res.ok)throw new Error('fetch failed');
+      return res.blob();
+    }).then(blob=>{
+      const reader=new FileReader();
+      reader.onload=()=>{clearTimeout(timer);resolve(reader.result);};
+      reader.onerror=()=>{clearTimeout(timer);resolve(null);};
+      reader.readAsDataURL(blob);
+    }).catch(()=>{clearTimeout(timer);resolve(null);});
+  });
+}
+
 async function generateAndUploadBatchPDF(expenses,actorId){
+  const imageMap={};
+  await Promise.all(expenses.filter(e=>e.receipt_url).map(async e=>{
+    imageMap[e.id]=await fetchImageAsDataURL(e.receipt_url);
+  }));
   const container=document.createElement('div');
   container.style.position='fixed';container.style.left='-9999px';container.style.top='0';
-  container.innerHTML=buildBatchHTML(expenses);
+  container.innerHTML=buildBatchHTML(expenses,imageMap);
   const style=document.createElement('style');
   style.textContent='.r-item{text-align:center}.r-item img{width:180px;height:140px;object-fit:cover;border:1px solid #000;display:block}.r-item p{font-size:9px;margin-top:3px;width:180px}';
   container.appendChild(style);
   document.body.appendChild(container);
   try{
     const opt={margin:8,filename:'batch.pdf',image:{type:'jpeg',quality:0.92},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}};
-    const blob=await html2pdf().set(opt).from(container).outputPdf('blob');
+    const pdfPromise=html2pdf().set(opt).from(container).outputPdf('blob');
+    const timeoutPromise=new Promise((_,reject)=>setTimeout(()=>reject(new Error('PDF生成がタイムアウトしました')),25000));
+    const blob=await Promise.race([pdfPromise,timeoutPromise]);
     document.body.removeChild(container);
     const path=`batches/${actorId}/${Date.now()}.pdf`;
     const{error:upErr}=await sb.storage.from('receipts').upload(path,blob,{contentType:'application/pdf'});
