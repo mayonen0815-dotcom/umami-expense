@@ -155,8 +155,8 @@ nav{flex:1;padding:10px}
   .form-grid{grid-template-columns:1fr}
   .fab{display:flex}
   .page{padding:16px;padding-bottom:100px}
-  .page-header .btn-primary{display:none}
-  .page-header .btn-secondary{display:none}
+  .page-header{flex-wrap:wrap;gap:10px}
+  .page-header>div:last-child{width:100%;display:flex;flex-wrap:wrap;gap:8px}
 }
 @media(min-width:769px){
   .mobile-header{display:none}
@@ -265,8 +265,8 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
   const filtered=getFiltered();
   const isOffice=profile.role==='office';
   const isStaff=profile.role==='staff';
-  const submittableStatuses=['draft','rejected'];
-  const showGrouping=(!statusFilter||statusFilter==='pending_office');
+  const submittableStatuses=['draft','rejected','pending_office'];
+  const showGrouping=!selectMode&&(!statusFilter||statusFilter==='pending_office');
   const pendingItems=showGrouping?filtered.filter(e=>e.status==='pending_office'):[];
   const otherItems=filtered.filter(e=>!(showGrouping&&e.status==='pending_office'));
   const groups={};
@@ -303,7 +303,7 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     setBundlingKey(null);
   }
   return(<div className="page"><div className="page-header"><div className="page-title">経費一覧</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{isStaff&&<button className={selectMode?'btn btn-primary':'btn btn-secondary'} onClick={()=>{setSelectMode(m=>!m);setSelected({});}}>✅ 経費申請</button>}{isStaff&&<button className="btn btn-secondary" onClick={onBulk}>📷 一括申請</button>}{isStaff&&<button className="btn btn-primary" onClick={onNew}>＋ 申請</button>}</div></div>
-    {selectMode&&(<div className="select-bar"><span className="select-bar-text">{selectedIds.length}件選択中（下書き・却下のみ選択できます）</span><button className="btn btn-primary btn-sm" onClick={handleSubmitSelected} disabled={submitting||selectedIds.length===0}>{submitting?'送信中...':'📤 経費提出'}</button></div>)}
+    {selectMode&&(<div className="select-bar"><span className="select-bar-text">{selectedIds.length}件選択中（下書き・承認待ち・却下が選択できます）</span><button className="btn btn-primary btn-sm" onClick={handleSubmitSelected} disabled={submitting||selectedIds.length===0}>{submitting?'送信中...':'📤 経費提出'}</button></div>)}
     <div className="filter-row">
       <div className="search-wrap"><span className="search-icon">🔍</span><input className="form-input search-input" placeholder="検索..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
       <select className="form-input" style={{width:110,fontSize:13}} value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">全ステータス</option>{Object.entries(STATUS).map(([v,s])=><option key={v} value={v}>{s.label}</option>)}</select>
@@ -322,7 +322,15 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
               <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ {fmtDate(group.day)}申請（{group.items.length}件・{fmt(total)}）</span>
               {isOffice&&<button className="btn btn-warning btn-sm" onClick={()=>handleBundleGroup(group.items)} disabled={isBundling}>{isBundling?'PDF作成中...':group.items.length>1?'📄 まとめて承認中へ':'📄 承認中へ'}</button>}
             </div>
-            <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
+            <div className="batch-card-body">{group.items.map(e=>{
+              const canPick=selectMode&&isStaff&&submittableStatuses.includes(e.status);
+              return(<div className="expense-row" key={e.id} style={{cursor:canPick?'default':'pointer'}} onClick={canPick?undefined:()=>onSelect(e.id)}>
+                {selectMode&&isStaff&&<input type="checkbox" className="checkbox" checked={!!selected[e.id]} onChange={()=>toggleSelect(e.id)}/>}
+                <span className="expense-name" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.profiles?.name||''}</span>
+                <span className="expense-title" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.title}</span>
+                <span className="expense-amount">{fmt(e.amount)}</span>
+              </div>);
+            })}</div>
           </div>);
         })}
       </>)}
@@ -383,217 +391,4 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
   const canDelete=isOffice;
   const steps=[{label:'申請',active:expense.status==='pending_office',done:['processing','approved'].includes(expense.status)},{label:'承認中',active:expense.status==='processing',done:expense.status==='approved',isProcessing:true},{label:'承認済み',active:false,done:expense.status==='approved'}];
   return(<div className="page"><div style={{marginBottom:16}}><button className="btn btn-secondary" onClick={onBack}>← 戻る</button></div><div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16}}><div><h2 style={{fontSize:17,fontWeight:700}}>{expense.title}</h2><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>申請者: {expense.profiles?.name}{expense.company&&<span style={{color:'#92400e',fontWeight:600,marginLeft:6}}>[{expense.company}]</span>}</div></div><Badge status={expense.status}/></div>{expense.status!=='rejected'&&(<div className="approval-flow">{steps.map((s,i)=>(<React.Fragment key={i}><div className={`flow-step ${s.active?'active':''} ${s.done?'done':''} ${s.isProcessing&&s.active?'processing':''}`}><div className="flow-step-name">{s.done?'✅':s.active?(s.isProcessing?'🔄':'🔵'):'⭕'} {s.label}</div></div>{i<steps.length-1&&<span className="flow-arrow">→</span>}</React.Fragment>))}</div>)}<div className="card" style={{padding:16,marginBottom:12}}><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>{[['金額',fmt(expense.amount)],['カテゴリ',getCat(expense.category)],['日付',fmtDate(expense.expense_date)],['登録日',fmtDate(expense.created_at)]].map(([k,v])=>(<div key={k}><div style={{fontSize:11,color:'#94a3b8',marginBottom:2}}>{k}</div><div style={{fontSize:13,fontWeight:600}}>{v}</div></div>))}</div>{expense.description&&<div style={{marginTop:12,paddingTop:12,borderTop:'1px solid #f1f5f9'}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:4}}>備考</div><div style={{fontSize:13}}>{expense.description}</div></div>}</div>{expense.batch_id&&<div className="card" style={{padding:14,marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between'}}><span style={{fontSize:13,color:'#64748b'}}>📎 まとめPDFに含まれています</span>{expense.batch_pdf_url&&<a className="btn btn-secondary btn-sm" href={expense.batch_pdf_url} target="_blank" rel="noreferrer">📄 開く</a>}</div>}{expense.receipt_url&&(<div className="card" style={{padding:14,marginBottom:12}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:8}}>領収書</div><a href={expense.receipt_url} target="_blank" rel="noreferrer"><img src={expense.receipt_url} className="receipt-preview" alt="領収書"/></a></div>)}{logs.length>0&&(<div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:13,fontWeight:600,marginBottom:12}}>承認履歴</div>{logs.map(l=>(<div className="log-item" key={l.id}><div className="log-avatar">{l.profiles?.name?.[0]}</div><div className="log-content"><div className="log-meta"><span style={{fontWeight:600,color:'#374151'}}>{l.profiles?.name}</span>{' · '}<span className={`action-${l.action}`}>{l.action==='approve'?'承認':l.action==='reject'?'却下':l.action==='process'?'承認中へ':'申請'}</span></div>{l.comment&&<div className="log-comment">{l.comment}</div>}</div></div>))}</div>)}{(canProcess||canApprove||canReject||canSubmit||canEdit||canDelete)&&(<div className="card" style={{padding:16}}>
-    {canProcess&&<button className="btn btn-warning" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={handlePDFAndProcess} disabled={loading}>📄 PDF出力 → 承認中へ</button>}
-    {canApprove&&(<><textarea className="form-input" rows={2} style={{resize:'none',marginBottom:10}} value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメント（任意）"/><button className="btn btn-success" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={()=>doAction('approve')} disabled={loading}>✅ 承認済みにする</button></>)}
-    {canReject&&<button className="btn btn-danger" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={()=>doAction('reject')} disabled={loading}>❌ 却下</button>}
-    {canSubmit&&<button className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={()=>doAction('submit')} disabled={loading}>📤 申請する</button>}
-    {canEdit&&(<div style={{display:'flex',gap:10,marginBottom:10}}><button className="btn btn-secondary" style={{flex:1,justifyContent:'center'}} onClick={()=>onEdit(expenseId)}>✏️ 編集</button><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={doDelete}>🗑 削除</button></div>)}
-    {canDelete&&!canEdit&&!canProcess&&!canApprove&&!canReject&&<button className="btn btn-danger" style={{width:'100%',justifyContent:'center',padding:'12px'}} onClick={doDelete}>🗑 この申請を削除</button>}
-  </div>)}</div>);
-}
-
-function ApprovalPage({profile,onSelect}){
-  const[expenses,setExpenses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[bundlingKey,setBundlingKey]=useState(null);
-  useEffect(()=>{loadData()},[]);
-  async function loadData(){
-    const{data}=await sb.from('expenses').select('*,profiles(name)').in('status',['pending_office','processing']).order('created_at',{ascending:true});
-    setExpenses(data||[]);
-    const batchIds=[...new Set((data||[]).filter(e=>e.batch_id).map(e=>e.batch_id))];
-    if(batchIds.length){const{data:bd}=await sb.from('pdf_batches').select('*').in('id',batchIds);setBatches(bd||[]);}else{setBatches([]);}
-    setLoading(false);
-  }
-  const pending=expenses.filter(e=>e.status==='pending_office');
-  const processing=expenses.filter(e=>e.status==='processing');
-  const pendingGroups={};
-  pending.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(pendingGroups[key]=pendingGroups[key]||{company:e.company,day,items:[]}).items.push(e);});
-  const processingByBatch={};
-  processing.forEach(e=>{const k=e.batch_id||'nobatch';(processingByBatch[k]=processingByBatch[k]||[]).push(e);});
-  async function handleBundleGroup(items){
-    setBundlingKey(items[0].id);
-    try{
-      const pdf_url=await generateAndUploadBatchPDF(items,profile.id);
-      const{data:batch,error:bErr}=await sb.from('pdf_batches').insert({company:items[0].company,created_by:profile.id,pdf_url,status:'processing'}).select().single();
-      if(bErr)throw bErr;
-      const ids=items.map(e=>e.id);
-      await sb.from('expenses').update({status:'processing',batch_id:batch.id}).in('id',ids);
-      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'process',comment:`${items.length}件まとめPDF（同日申請）`,from_status:'pending_office',to_status:'processing'})));
-      await loadData();
-    }catch(e){alert('まとめPDFの作成に失敗しました: '+e.message);}
-    setBundlingKey(null);
-  }
-  async function approveBatch(batchId,items){
-    setLoading(true);
-    await sb.from('pdf_batches').update({status:'approved',approved_at:new Date().toISOString()}).eq('id',batchId);
-    const ids=items.map(e=>e.id);
-    await sb.from('expenses').update({status:'approved'}).in('id',ids);
-    await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:'',from_status:'processing',to_status:'approved'})));
-    await loadData();
-  }
-  async function rejectBatch(batchId,items){
-    if(!confirm('このまとめPDFを差し戻しますか？（承認待ちに戻ります）'))return;
-    setLoading(true);
-    await sb.from('pdf_batches').update({status:'rejected'}).eq('id',batchId);
-    const ids=items.map(e=>e.id);
-    await sb.from('expenses').update({status:'pending_office',batch_id:null}).in('id',ids);
-    await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'reject',comment:'まとめPDF差し戻し',from_status:'processing',to_status:'pending_office'})));
-    await loadData();
-  }
-  return(<div className="page"><div className="page-header"><div><div className="page-title">承認中</div><div className="page-sub">対応が必要な申請</div></div></div>
-    {loading&&<div className="empty">読み込み中...</div>}
-    {!loading&&expenses.length===0&&<div className="card"><div className="empty">✅ 対応が必要な申請はありません</div></div>}
-    {Object.keys(pendingGroups).length>0&&(<>
-      <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同日申請は自動でまとめられます）</div>
-      {Object.entries(pendingGroups).map(([key,group])=>{
-        const total=group.items.reduce((s,e)=>s+e.amount,0);
-        const isBundling=bundlingKey===group.items[0].id;
-        return(<div className="batch-card" key={key}>
-          <div className="batch-card-header">
-            <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ {fmtDate(group.day)}申請（{group.items.length}件・{fmt(total)}）</span>
-            <button className="btn btn-warning btn-sm" onClick={()=>handleBundleGroup(group.items)} disabled={isBundling}>{isBundling?'PDF作成中...':group.items.length>1?'📄 まとめて承認中へ':'📄 承認中へ'}</button>
-          </div>
-          <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
-        </div>);
-      })}
-    </>)}
-    {Object.keys(processingByBatch).length>0&&(<>
-      <div style={{fontSize:13,fontWeight:600,color:'#1d4ed8',marginBottom:8}}>🔄 承認中</div>
-      {Object.entries(processingByBatch).map(([batchKey,items])=>{
-        const batch=batches.find(b=>b.id===batchKey);
-        const total=items.reduce((s,e)=>s+e.amount,0);
-        return(<div className="batch-card" key={batchKey}>
-          <div className="batch-card-header">
-            <span className="batch-card-title">{items[0].company?.replace('株式会社','')} まとめ（{items.length}件・{fmt(total)}）</span>
-            <div style={{display:'flex',gap:8}}>
-              {batch?.pdf_url&&<a className="btn btn-secondary btn-sm" href={batch.pdf_url} target="_blank" rel="noreferrer">📄 PDF</a>}
-              <button className="btn btn-danger btn-sm" onClick={()=>rejectBatch(batchKey,items)}>差し戻し</button>
-              <button className="btn btn-success btn-sm" onClick={()=>approveBatch(batchKey,items)}>✅ 承認済みにする</button>
-            </div>
-          </div>
-          <div className="batch-card-body">{items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
-        </div>);
-      })}
-    </>)}
-  </div>);
-}
-
-function ArchivePage({profile}){
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[actingKey,setActingKey]=useState(null);
-  useEffect(()=>{loadData()},[monthFilter,companyFilter]);
-  async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)').in('status',['processing','approved']);if(profile.role==='staff')q=q.eq('user_id',profile.id);if(monthFilter){const start=monthFilter+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);q=q.gte('expense_date',start).lte('expense_date',end);}if(companyFilter)q=q.eq('company',companyFilter);const{data}=await q.order('expense_date',{ascending:false});
-    const batchIds=[...new Set((data||[]).filter(e=>e.batch_id).map(e=>e.batch_id))];
-    let batchMap={};
-    if(batchIds.length){const{data:bd}=await sb.from('pdf_batches').select('*').in('id',batchIds);(bd||[]).forEach(b=>{batchMap[b.id]=b;});}
-    setExpenses((data||[]).map(e=>({...e,_batch:e.batch_id?batchMap[e.batch_id]:null})));
-    setLoading(false);}
-  async function approveBatch(batchId,items){
-    setActingKey(batchId);
-    await sb.from('pdf_batches').update({status:'approved',approved_at:new Date().toISOString()}).eq('id',batchId);
-    const ids=items.map(e=>e.id);
-    await sb.from('expenses').update({status:'approved'}).in('id',ids);
-    await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:'',from_status:'processing',to_status:'approved'})));
-    await loadData();
-    setActingKey(null);
-  }
-  async function rejectBatch(batchId,items){
-    if(!confirm('この経費を非承認にしますか？（下書きに戻り、現場側で再提出できます）'))return;
-    setActingKey(batchId);
-    await sb.from('pdf_batches').update({status:'rejected'}).eq('id',batchId);
-    const ids=items.map(e=>e.id);
-    await sb.from('expenses').update({status:'rejected',batch_id:null}).in('id',ids);
-    await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'reject',comment:'',from_status:'processing',to_status:'rejected'})));
-    await loadData();
-    setActingKey(null);
-  }
-  const total=expenses.filter(e=>e.status==='approved').reduce((s,e)=>s+e.amount,0);
-  const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
-  const batched=expenses.filter(e=>e.batch_id);
-  const standalone=expenses.filter(e=>!e.batch_id);
-  const groups={};
-  batched.forEach(e=>{(groups[e.batch_id]=groups[e.batch_id]||[]).push(e);});
-  const processingGroups=Object.entries(groups).filter(([,items])=>items[0].status==='processing');
-  const approvedGroups=Object.entries(groups).filter(([,items])=>items[0].status==='approved');
-  return(<div className="page"><div className="page-header"><div><div className="page-title">アーカイブ</div><div className="page-sub">提出済み・承認済みの経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.some(e=>e.status==='approved')&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認済み {expenses.filter(e=>e.status==='approved').length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
-    {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">まだ提出された経費はありません</div></div>:(<>
-      {processingGroups.length>0&&(<>
-        <div style={{fontSize:13,fontWeight:600,color:'#1d4ed8',marginBottom:8}}>🔄 承認待ち</div>
-        {processingGroups.map(([batchId,items])=>{
-          const b=items[0]._batch;
-          const t=items.reduce((s,e)=>s+e.amount,0);
-          const acting=actingKey===batchId;
-          return(<div className="batch-card" key={batchId}>
-            <div className="batch-card-header">
-              <span className="batch-card-title">{items[0].company?.replace('株式会社','')} まとめPDF（{items.length}件・{fmt(t)}）</span>
-              <div style={{display:'flex',gap:8}}>
-                {b?.pdf_url&&<a className="btn btn-secondary btn-sm" href={b.pdf_url} target="_blank" rel="noreferrer">📄 PDFを開く</a>}
-                {profile.role==='office'&&(<>
-                  <button className="btn btn-danger btn-sm" onClick={()=>rejectBatch(batchId,items)} disabled={acting}>❌ 非承認</button>
-                  <button className="btn btn-success btn-sm" onClick={()=>approveBatch(batchId,items)} disabled={acting}>✅ 承認</button>
-                </>)}
-              </div>
-            </div>
-            <div className="batch-card-body">{items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
-          </div>);
-        })}
-      </>)}
-      {approvedGroups.length>0&&(<>
-        <div style={{fontSize:13,fontWeight:600,color:'#15803d',marginBottom:8}}>✅ 承認済み</div>
-        {approvedGroups.map(([batchId,items])=>{
-          const b=items[0]._batch;
-          const t=items.reduce((s,e)=>s+e.amount,0);
-          return(<div className="batch-card" key={batchId}>
-            <div className="batch-card-header">
-              <span className="batch-card-title">{items[0].company?.replace('株式会社','')} まとめPDF（{items.length}件・{fmt(t)}）{b?.approved_at?` ／ 承認日 ${fmtDate(b.approved_at)}`:''}</span>
-              {b?.pdf_url&&<a className="btn btn-secondary btn-sm" href={b.pdf_url} target="_blank" rel="noreferrer">📄 PDFを開く</a>}
-            </div>
-            <div className="batch-card-body">{items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
-          </div>);
-        })}
-      </>)}
-      {standalone.length>0&&(<div className="table-wrap">{standalone.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span><Badge status={e.status}/><button className="btn btn-secondary btn-sm" onClick={()=>generatePDF(e)}>📄 PDF</button></div>))}</div>)}
-    </>)}
-  </div>);
-}
-
-function ReportPage({profile}){
-  const[month,setMonth]=useState(new Date().toISOString().slice(0,7));const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[companyFilter,setCompanyFilter]=useState('');
-  useEffect(()=>{loadData()},[month,companyFilter]);
-  async function loadData(){setLoading(true);const start=month+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);let q=sb.from('expenses').select('*').gte('expense_date',start).lte('expense_date',end).eq('status','approved');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(companyFilter)q=q.eq('company',companyFilter);const{data}=await q;setExpenses(data||[]);setLoading(false);}
-  const total=expenses.reduce((s,e)=>s+e.amount,0);
-  const byCat=CATEGORIES.map((cat,i)=>{const amount=expenses.filter(e=>e.category===cat.value).reduce((s,e)=>s+e.amount,0);return{...cat,amount,color:CAT_COLORS[i%CAT_COLORS.length],pct:total?Math.round(amount/total*100):0};}).filter(c=>c.amount>0).sort((a,b)=>b.amount-a.amount);
-  const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
-  const r=60,cx=80,cy=80,circ=2*Math.PI*r;let offset=0;
-  const arcs=byCat.map(cat=>{const dash=(cat.pct/100)*circ;const el={cat,dash,offset};offset+=dash;return el;});
-  return(<div className="page"><div className="page-header"><div className="page-title">月次レポート</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><select className="form-input" style={{width:140,fontSize:13}} value={month} onChange={e=>setMonth(e.target.value)}>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:140,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div></div>{loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="empty">この月の承認済み経費はありません</div>:(<><div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:12,color:'#64748b',marginBottom:4}}>承認済み合計</div><div style={{fontSize:28,fontWeight:700}}>{fmt(total)}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>{expenses.length}件</div></div>{byCat.length>0&&(<div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:13,fontWeight:600,marginBottom:14}}>カテゴリ別</div><div className="donut-wrap"><svg width="160" height="160">{arcs.map(({cat,dash,offset})=>(<circle key={cat.value} cx={cx} cy={cy} r={r} fill="none" stroke={cat.color} strokeWidth="20" strokeDasharray={`${dash} ${circ-dash}`} strokeDashoffset={-offset}/>))}<text x={cx} y={cy-6} textAnchor="middle" fill="#64748b" fontSize="11">合計</text><text x={cx} y={cy+10} textAnchor="middle" fill="#0f172a" fontSize="13" fontWeight="bold">{new Intl.NumberFormat('ja-JP',{notation:'compact'}).format(total)}円</text></svg><div className="legend">{byCat.map(cat=>(<div className="legend-item" key={cat.value}><div className="legend-dot" style={{background:cat.color}}/><span className="legend-label">{cat.label}</span><span className="legend-pct">{cat.pct}%</span><span className="legend-amt">{fmt(cat.amount)}</span></div>))}</div></div></div>)}<div className="table-wrap">{expenses.sort((a,b)=>new Date(a.expense_date)-new Date(b.expense_date)).map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div></>)}</div>);
-}
-
-function App(){
-  const[user,setUser]=useState(null);const[profile,setProfile]=useState(null);const[company,setCompany]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[showCompanySelect,setShowCompanySelect]=useState(false);const[page,setPage]=useState('dashboard');const[selectedId,setSelectedId]=useState(null);const[editId,setEditId]=useState(null);const[drawerOpen,setDrawerOpen]=useState(false);
-  useEffect(()=>{sb.auth.getSession().then(({data:{session}})=>{setUser(session?.user||null);if(session?.user)loadProfile(session.user.id);else setAuthLoading(false);});const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{setUser(session?.user||null);if(session?.user)loadProfile(session.user.id);else{setProfile(null);setCompany(null);setShowCompanySelect(false);setAuthLoading(false);}});return()=>subscription.unsubscribe();},[]);
-  async function loadProfile(uid){const{data}=await sb.from('profiles').select('*').eq('id',uid).single();setProfile(data);setAuthLoading(false);}
-  function handleLogin(prof){setProfile(prof);if(prof.role==='staff')setShowCompanySelect(true);}
-  function handleCompanySelect(c){setCompany(c);setShowCompanySelect(false);}
-  async function logout(){await sb.auth.signOut();setPage('dashboard');setSelectedId(null);setEditId(null);setCompany(null);setShowCompanySelect(false);}
-  function goPage(p){setPage(p);setSelectedId(null);setEditId(null);setDrawerOpen(false);}
-  if(authLoading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'#94a3b8'}}>読み込み中...</div>;
-  if(!user||!profile)return<Login onLogin={handleLogin}/>;
-  if(showCompanySelect)return<CompanySelect profile={profile} onSelect={handleCompanySelect}/>;
-  const isOffice=profile.role==='office';
-  const navItems=[{key:'dashboard',icon:'🏠',label:'ホーム'},{key:'expenses',icon:'📋',label:'経費一覧'},...(isOffice?[{key:'approvals',icon:'🔄',label:'承認中'}]:[]),{key:'archive',icon:'🗂',label:'アーカイブ'},{key:'reports',icon:'📊',label:'レポート'}];
-  const pageTitles={dashboard:'ダッシュボード',expenses:'経費一覧',approvals:'承認中',archive:'アーカイブ',reports:'月次レポート',detail:'経費詳細',form:editId?'経費を編集':'経費を申請',bulk:'一括申請'};
-  function renderPage(){
-    if(page==='detail'&&selectedId)return<ExpenseDetail profile={profile} expenseId={selectedId} onBack={()=>{setPage('expenses');setSelectedId(null);}} onEdit={id=>{setEditId(id);setPage('form');}}/>;
-    if(page==='form')return<ExpenseForm profile={profile} company={company} expenseId={editId} onSave={()=>{setPage('expenses');setEditId(null);}} onCancel={()=>{setPage('expenses');setEditId(null);}}/>;
-    if(page==='bulk')return<BulkExpenseForm profile={profile} company={company} onSave={()=>setPage('expenses')} onCancel={()=>setPage('expenses')}/>;
-    if(page==='expenses')return<ExpenseList profile={profile} company={company} onSelect={id=>{setSelectedId(id);setPage('detail');}} onNew={()=>{setEditId(null);setPage('form');}} onBulk={()=>setPage('bulk')}/>;
-    if(page==='approvals')return<ApprovalPage profile={profile} onSelect={id=>{setSelectedId(id);setPage('detail');}}/>;
-    if(page==='archive')return<ArchivePage profile={profile}/>;
-    if(page==='reports')return<ReportPage profile={profile}/>;
-    return<Dashboard profile={profile} company={company}/>;
-  }
-  const SidebarContent=()=>(<><div className="sidebar-logo"><div className="logo-icon">🧾</div><div><div className="logo-text">うま味経費</div><div className="logo-sub">Expense Manager</div></div></div><nav>{navItems.map(n=>(<button key={n.key} className={`nav-item ${page===n.key?'active':''}`} onClick={()=>goPage(n.key)}><span>{n.icon}</span>{n.label}</button>))}</nav><div className="sidebar-user"><div className="user-info"><div className="user-avatar">{profile.name[0]}</div><div><div className="user-name">{profile.name}</div><span className={`role-badge ${ROLE_BADGE[profile.role]||'role-staff'}`}>{ROLE_LABELS[profile.role]||profile.role}</span>{company&&<span className="company-badge" style={{display:'block',marginTop:3}}>{company.replace('株式会社','㈱')}</span>}</div></div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{profile.role==='staff'&&<button className="btn btn-secondary btn-sm" onClick={()=>setShowCompanySelect(true)}>🏢 切替</button>}<button className="logout-btn" onClick={logout}>🚪 ログアウト</button></div></div></>);
-  return(<div className="app"><aside className="sidebar"><SidebarContent/></aside><div className={`sidebar-overlay ${drawerOpen?'open':''}`} onClick={()=>setDrawerOpen(false)}/><div className={`sidebar-drawer ${drawerOpen?'open':''}`}><SidebarContent/></div><div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}><div className="mobile-header"><button className="hamburger" onClick={()=>setDrawerOpen(true)}>☰</button><span className="mobile-header-title">{pageTitles[page]||'うま味経費'}</span><div style={{width:32}}/></div><main className="main">{renderPage()}</main></div><nav className="bottom-nav"><div className="bottom-nav-items">{navItems.map(n=>(<button key={n.key} className={`bottom-nav-item ${page===n.key?'active':''}`} onClick={()=>goPage(n.key)}><span>{n.icon}</span><span>{n.label}</span></button>))}</div></nav>{profile.role==='staff'&&!['form','bulk'].includes(page)&&(<button className="fab" onClick={()=>setPage('bulk')}>📷</button>)}</div>);
-}
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-</script>
-</body>
-</html>
+    {canProcess&&<button className="btn btn-warning" style={{width:'100%',justifyContent:'center',padding:'12px',marginB
