@@ -8,7 +8,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#f8fafc;color:#0f172a}
@@ -190,74 +189,6 @@ function generatePDF(expense){
   window.open(URL.createObjectURL(blob),'_blank');
 }
 
-function buildBatchHTML(expenses,imageMap){
-  const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
-  const total=expenses.reduce((s,e)=>s+e.amount,0);
-  const company=expenses[0]?.company||'';
-  const rows=expenses.map(e=>`<tr><td>${e.expense_date}</td><td>${e.profiles?.name||''}</td><td>${getCat(e.category)} ${e.title}</td><td style="text-align:right">¥${e.amount.toLocaleString()}</td><td>${e.description||''}</td></tr>`).join('');
-  const withReceipt=expenses.filter(e=>imageMap&&imageMap[e.id]);
-  const receiptItems=withReceipt.map(e=>`<div class="r-item"><img src="${imageMap[e.id]}"/><p>${e.expense_date} ${e.profiles?.name||''} ${e.title}</p></div>`).join('');
-  return `<div style="font-family:'Hiragino Sans',sans-serif;font-size:11px;padding:14px;width:760px;color:#000;background:#fff;">
-    <h2 style="text-align:center;font-size:16px;margin-bottom:14px">UMAMI経費精算（まとめ）</h2>
-    <div style="display:flex;justify-content:space-between;margin-bottom:10px">
-      <div>申請日：${today}${company?` ／ ${company}`:''}</div>
-      <div style="border:2px solid #000;padding:4px 14px;font-size:13px;font-weight:bold">合計 ¥${total.toLocaleString()}（${expenses.length}件）</div>
-    </div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:10px" border="1" cellspacing="0" cellpadding="4">
-      <thead><tr style="background:#d9d9d9"><th>日付</th><th>申請者</th><th>適用</th><th>金額</th><th>備考</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    ${withReceipt.length?`<div style="margin-top:20px;border-top:2px solid #000;padding-top:14px">
-      <div style="font-size:13px;font-weight:bold;margin-bottom:12px">領収書（${withReceipt.length}件）</div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px">${receiptItems}</div>
-    </div>`:''}
-  </div>`;
-}
-
-function fetchImageAsDataURL(url,timeoutMs=8000){
-  return new Promise(resolve=>{
-    const controller=new AbortController();
-    const timer=setTimeout(()=>{controller.abort();resolve(null);},timeoutMs);
-    fetch(url,{signal:controller.signal}).then(res=>{
-      if(!res.ok)throw new Error('fetch failed');
-      return res.blob();
-    }).then(blob=>{
-      const reader=new FileReader();
-      reader.onload=()=>{clearTimeout(timer);resolve(reader.result);};
-      reader.onerror=()=>{clearTimeout(timer);resolve(null);};
-      reader.readAsDataURL(blob);
-    }).catch(()=>{clearTimeout(timer);resolve(null);});
-  });
-}
-
-function resizeImageDataURL(dataUrl,maxDim=700,quality=0.55,timeoutMs=6000){
-  return new Promise(resolve=>{
-    let done=false;
-    const finish=v=>{if(!done){done=true;resolve(v);}};
-    const timer=setTimeout(()=>finish(null),timeoutMs);
-    const img=new Image();
-    img.onload=()=>{
-      try{
-        clearTimeout(timer);
-        let w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
-        if(!w||!h){finish(dataUrl);return;}
-        if(w>maxDim||h>maxDim){
-          const scale=maxDim/Math.max(w,h);
-          w=Math.max(1,Math.round(w*scale));
-          h=Math.max(1,Math.round(h*scale));
-        }
-        const canvas=document.createElement('canvas');
-        canvas.width=w;canvas.height=h;
-        const ctx=canvas.getContext('2d');
-        ctx.drawImage(img,0,0,w,h);
-        finish(canvas.toDataURL('image/jpeg',quality));
-      }catch(e){finish(null);}
-    };
-    img.onerror=()=>{clearTimeout(timer);finish(null);};
-    img.src=dataUrl;
-  });
-}
-
 function downloadBlob(blob,filename){
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -273,41 +204,6 @@ function buildGroupCSV(items){
   const esc=v=>{const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
   const lines=[header,...rows].map(r=>r.map(esc).join(','));
   return '\uFEFF'+lines.join('\r\n');
-}
-
-async function generateBatchPDFBlob(expenses){
-  const imageMap={};
-  await Promise.all(expenses.filter(e=>e.receipt_url).map(async e=>{
-    const raw=await fetchImageAsDataURL(e.receipt_url);
-    imageMap[e.id]=raw?await resizeImageDataURL(raw):null;
-  }));
-  const container=document.createElement('div');
-  container.style.position='fixed';container.style.left='-9999px';container.style.top='0';
-  container.innerHTML=buildBatchHTML(expenses,imageMap);
-  const style=document.createElement('style');
-  style.textContent='.r-item{text-align:center}.r-item img{width:180px;height:140px;object-fit:cover;border:1px solid #000;display:block}.r-item p{font-size:9px;margin-top:3px;width:180px}';
-  container.appendChild(style);
-  document.body.appendChild(container);
-  try{
-    const opt={margin:8,filename:'batch.pdf',image:{type:'jpeg',quality:0.85},html2canvas:{scale:1.3,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}};
-    const pdfPromise=html2pdf().set(opt).from(container).outputPdf('blob');
-    const timeoutPromise=new Promise((_,reject)=>setTimeout(()=>reject(new Error('PDF生成がタイムアウトしました')),25000));
-    const blob=await Promise.race([pdfPromise,timeoutPromise]);
-    document.body.removeChild(container);
-    return blob;
-  }catch(e){
-    if(container.parentNode)document.body.removeChild(container);
-    throw e;
-  }
-}
-
-async function generateAndUploadBatchPDF(expenses,actorId){
-  const blob=await generateBatchPDFBlob(expenses);
-  const path=`batches/${actorId}/${Date.now()}.pdf`;
-  const{error:upErr}=await sb.storage.from('receipts').upload(path,blob,{contentType:'application/pdf'});
-  if(upErr)throw upErr;
-  const{data:{publicUrl}}=sb.storage.from('receipts').getPublicUrl(path);
-  return publicUrl;
 }
 
 function Login({onLogin}){
@@ -329,7 +225,7 @@ function Dashboard({profile,company}){
 }
 
 function ExpenseList({profile,company,onSelect,onNew,onBulk}){
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const[statusFilter,setStatusFilter]=useState('');const[personFilter,setPersonFilter]=useState('');const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState(company||'');const[bundlingKey,setBundlingKey]=useState(null);const[mode,setMode]=useState('none');const[selected,setSelected]=useState({});const[busy,setBusy]=useState(false);const[exportOpenKey,setExportOpenKey]=useState(null);const[exportingKey,setExportingKey]=useState(null);
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const[statusFilter,setStatusFilter]=useState('');const[personFilter,setPersonFilter]=useState('');const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState(company||'');const[approvingKey,setApprovingKey]=useState(null);const[mode,setMode]=useState('none');const[selected,setSelected]=useState({});const[busy,setBusy]=useState(false);
   useEffect(()=>{loadData()},[]);
   async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(company)q=q.eq('company',company);const{data}=await q.order('created_at',{ascending:false});setExpenses(data||[]);setSelected({});setLoading(false);}
   const personList=[...new Set(expenses.map(e=>e.profiles?.name).filter(Boolean))];
@@ -338,7 +234,7 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
   const filtered=getFiltered();
   const isOffice=profile.role==='office';
   const isStaff=profile.role==='staff';
-  const submittableStatuses=['draft','rejected','pending_office'];
+  const submittableStatuses=['draft','rejected'];
   const deletableStatuses=isOffice?Object.keys(STATUS):['draft','rejected'];
   const eligibleStatuses=mode==='delete'?deletableStatuses:mode==='submit'?submittableStatuses:[];
   const showGrouping=mode==='none'&&(!statusFilter||statusFilter==='pending_office');
@@ -354,12 +250,9 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     if(items.length===0)return;
     setBusy(true);
     try{
-      const pdf_url=await generateAndUploadBatchPDF(items,profile.id);
-      const{data:batch,error:bErr}=await sb.from('pdf_batches').insert({company:items[0].company,created_by:profile.id,pdf_url,status:'processing'}).select().single();
-      if(bErr)throw bErr;
       const ids=items.map(e=>e.id);
-      await sb.from('expenses').update({status:'processing',batch_id:batch.id}).in('id',ids);
-      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'process',comment:`${items.length}件を経費提出`,from_status:e.status,to_status:'processing'})));
+      await sb.from('expenses').update({status:'pending_office'}).in('id',ids);
+      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'submit',comment:`${items.length}件を経費提出`,from_status:e.status,to_status:'pending_office'})));
       setMode('none');
       await loadData();
     }catch(e){alert('経費提出に失敗しました: '+e.message);}
@@ -376,35 +269,23 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     }catch(e){alert('削除に失敗しました: '+e.message);}
     setBusy(false);
   }
-  async function handleExportPDF(items,key){
-    setExportingKey(key);
-    try{
-      const blob=await generateBatchPDFBlob(items);
-      downloadBlob(blob,`umami_${(items[0].company||'').replace('株式会社','')}_${items[0].expense_date||''}.pdf`);
-    }catch(e){alert('PDF出力に失敗しました: '+e.message);}
-    setExportingKey(null);
-    setExportOpenKey(null);
-  }
-  function handleExportCSV(items,key){
+  function handleExportCSV(items){
     const csv=buildGroupCSV(items);
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
     downloadBlob(blob,`umami_${(items[0].company||'').replace('株式会社','')}_${items[0].expense_date||''}.csv`);
-    setExportOpenKey(null);
   }
-  async function handleMoveToProcessing(items){
-    setBundlingKey(items[0].id);
+  async function handleApproveGroup(items,key){
+    setApprovingKey(key);
     try{
-      const{data:batch,error:bErr}=await sb.from('pdf_batches').insert({company:items[0].company,created_by:profile.id,pdf_url:null,status:'processing'}).select().single();
-      if(bErr)throw bErr;
       const ids=items.map(e=>e.id);
-      await sb.from('expenses').update({status:'processing',batch_id:batch.id}).in('id',ids);
-      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'process',comment:`${items.length}件まとめ（同日申請）`,from_status:'pending_office',to_status:'processing'})));
+      await sb.from('expenses').update({status:'approved'}).in('id',ids);
+      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:`${items.length}件まとめ（同日申請）`,from_status:'pending_office',to_status:'approved'})));
       await loadData();
-    }catch(e){alert('承認中への移動に失敗しました: '+e.message);}
-    setBundlingKey(null);
+    }catch(e){alert('承認に失敗しました: '+e.message);}
+    setApprovingKey(null);
   }
   return(<div className="page"><div className="page-header"><div className="page-title">経費一覧</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{isStaff&&<button className={mode==='submit'?'btn btn-primary':'btn btn-secondary'} onClick={()=>switchMode('submit')}>✅ 経費申請</button>}<button className={mode==='delete'?'btn btn-danger':'btn btn-secondary'} onClick={()=>switchMode('delete')}>🗑 経費削除</button>{isStaff&&<button className="btn btn-secondary" onClick={onBulk}>📷 一括申請</button>}{isStaff&&<button className="btn btn-primary" onClick={onNew}>＋ 申請</button>}</div></div>
-    {mode==='submit'&&(<div className="select-bar"><span className="select-bar-text">{selectedIds.length}件選択中（下書き・承認待ち・却下が選択できます）</span><button className="btn btn-primary btn-sm" onClick={handleSubmitSelected} disabled={busy||selectedIds.length===0}>{busy?'送信中...':'📤 経費提出'}</button></div>)}
+    {mode==='submit'&&(<div className="select-bar"><span className="select-bar-text">{selectedIds.length}件選択中（下書き・却下が選択できます）</span><button className="btn btn-primary btn-sm" onClick={handleSubmitSelected} disabled={busy||selectedIds.length===0}>{busy?'送信中...':'📤 経費提出'}</button></div>)}
     {mode==='delete'&&(<div className="select-bar" style={{background:'#fee2e2',borderColor:'#fecaca'}}><span className="select-bar-text" style={{color:'#991b1b'}}>{selectedIds.length}件選択中{isStaff?'（下書き・却下のみ）':''}</span><button className="btn btn-danger btn-sm" onClick={handleConfirmDelete} disabled={busy||selectedIds.length===0}>{busy?'削除中...':'🗑 確定'}</button></div>)}
     <div className="filter-row">
       <div className="search-wrap"><span className="search-icon">🔍</span><input className="form-input search-input" placeholder="検索..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
@@ -418,17 +299,13 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
         <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同日申請はまとめて表示されます）</div>
         {Object.entries(groups).map(([key,group])=>{
           const total=group.items.reduce((s,e)=>s+e.amount,0);
-          const isBundling=bundlingKey===group.items[0].id;
+          const isApproving=approvingKey===key;
           return(<div className="batch-card" key={key}>
             <div className="batch-card-header">
               <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ {fmtDate(group.day)}申請（{group.items.length}件・{fmt(total)}）</span>
-              {isOffice&&(<div style={{display:'flex',gap:8,position:'relative'}}>
-                <button className="btn btn-secondary btn-sm" onClick={()=>setExportOpenKey(k=>k===key?null:key)}>📄 PDF・CSVで出力する</button>
-                {exportOpenKey===key&&(<div style={{position:'absolute',top:'110%',right:0,background:'#fff',border:'1px solid #e2e8f0',borderRadius:8,boxShadow:'0 4px 12px rgba(0,0,0,.12)',padding:6,zIndex:10,display:'flex',flexDirection:'column',gap:4,minWidth:150}}>
-                  <button className="btn btn-secondary btn-sm" onClick={()=>handleExportPDF(group.items,key)} disabled={exportingKey===key}>{exportingKey===key?'作成中...':'📄 PDFで出力'}</button>
-                  <button className="btn btn-secondary btn-sm" onClick={()=>handleExportCSV(group.items,key)}>📊 CSV(Excel)で出力</button>
-                </div>)}
-                <button className="btn btn-warning btn-sm" onClick={()=>handleMoveToProcessing(group.items)} disabled={isBundling}>{isBundling?'処理中...':'📤 まとめて承認中へ'}</button>
+              {isOffice&&(<div style={{display:'flex',gap:8}}>
+                <button className="btn btn-secondary btn-sm" onClick={()=>handleExportCSV(group.items)}>📊 CSVで出力</button>
+                <button className="btn btn-success btn-sm" onClick={()=>handleApproveGroup(group.items,key)} disabled={isApproving}>{isApproving?'処理中...':'✅ まとめて承認済みにする'}</button>
               </div>)}
             </div>
             <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
@@ -481,129 +358,21 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
   async function loadData(){const[{data:exp},{data:lg}]=await Promise.all([sb.from('expenses').select('*,profiles(name)').eq('id',expenseId).single(),sb.from('approval_logs').select('*,profiles(name)').eq('expense_id',expenseId).order('created_at')]);setExpense(exp);setLogs(lg||[]);}
   async function doAction(action){setLoading(true);let newStatus;if(action==='submit')newStatus='pending_office';else if(action==='process')newStatus='processing';else if(action==='approve')newStatus='approved';else if(action==='reject')newStatus='rejected';await sb.from('expenses').update({status:newStatus}).eq('id',expenseId);await sb.from('approval_logs').insert({expense_id:expenseId,actor_id:profile.id,action,comment,from_status:expense.status,to_status:newStatus});setComment('');await loadData();setLoading(false);}
   async function doDelete(){if(!confirm('この申請を削除しますか？'))return;await sb.from('expenses').delete().eq('id',expenseId);onBack();}
-  async function handlePDFAndProcess(){setLoading(true);try{const pdf_url=await generateAndUploadBatchPDF([expense],profile.id);const{data:batch}=await sb.from('pdf_batches').insert({company:expense.company,created_by:profile.id,pdf_url,status:'processing'}).select().single();await sb.from('expenses').update({status:'processing',batch_id:batch.id}).eq('id',expenseId);await sb.from('approval_logs').insert({expense_id:expenseId,actor_id:profile.id,action:'process',comment:'',from_status:expense.status,to_status:'processing'});await loadData();}catch(e){alert('PDF作成に失敗しました: '+e.message);}setLoading(false);}
   if(!expense)return<div className="empty">読み込み中...</div>;
   const isOffice=profile.role==='office';
-  const canProcess=isOffice&&expense.status==='pending_office';
-  const canApprove=isOffice&&expense.status==='processing';
-  const canReject=isOffice&&['pending_office','processing'].includes(expense.status);
+  const canApprove=isOffice&&expense.status==='pending_office';
+  const canReject=isOffice&&expense.status==='pending_office';
   const canSubmit=profile.role==='staff'&&expense.status==='draft';
   const canEdit=profile.role==='staff'&&['draft','rejected'].includes(expense.status)&&expense.user_id===profile.id;
   const canDelete=isOffice;
-  const steps=[{label:'申請',active:expense.status==='pending_office',done:['processing','approved'].includes(expense.status)},{label:'承認中',active:expense.status==='processing',done:expense.status==='approved',isProcessing:true},{label:'承認済み',active:false,done:expense.status==='approved'}];
-  return(<div className="page"><div style={{marginBottom:16}}><button className="btn btn-secondary" onClick={onBack}>← 戻る</button></div><div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16}}><div><h2 style={{fontSize:17,fontWeight:700}}>{expense.title}</h2><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>申請者: {expense.profiles?.name}{expense.company&&<span style={{color:'#92400e',fontWeight:600,marginLeft:6}}>[{expense.company}]</span>}</div></div><Badge status={expense.status}/></div>{expense.status!=='rejected'&&(<div className="approval-flow">{steps.map((s,i)=>(<React.Fragment key={i}><div className={`flow-step ${s.active?'active':''} ${s.done?'done':''} ${s.isProcessing&&s.active?'processing':''}`}><div className="flow-step-name">{s.done?'✅':s.active?(s.isProcessing?'🔄':'🔵'):'⭕'} {s.label}</div></div>{i<steps.length-1&&<span className="flow-arrow">→</span>}</React.Fragment>))}</div>)}<div className="card" style={{padding:16,marginBottom:12}}><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>{[['金額',fmt(expense.amount)],['カテゴリ',getCat(expense.category)],['日付',fmtDate(expense.expense_date)],['登録日',fmtDate(expense.created_at)]].map(([k,v])=>(<div key={k}><div style={{fontSize:11,color:'#94a3b8',marginBottom:2}}>{k}</div><div style={{fontSize:13,fontWeight:600}}>{v}</div></div>))}</div>{expense.description&&<div style={{marginTop:12,paddingTop:12,borderTop:'1px solid #f1f5f9'}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:4}}>備考</div><div style={{fontSize:13}}>{expense.description}</div></div>}</div>{expense.batch_id&&<div className="card" style={{padding:14,marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between'}}><span style={{fontSize:13,color:'#64748b'}}>📎 まとめPDFに含まれています</span>{expense.batch_pdf_url&&<a className="btn btn-secondary btn-sm" href={expense.batch_pdf_url} target="_blank" rel="noreferrer">📄 開く</a>}</div>}{expense.receipt_url&&(<div className="card" style={{padding:14,marginBottom:12}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:8}}>領収書</div><a href={expense.receipt_url} target="_blank" rel="noreferrer"><img src={expense.receipt_url} className="receipt-preview" alt="領収書"/></a></div>)}{logs.length>0&&(<div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:13,fontWeight:600,marginBottom:12}}>承認履歴</div>{logs.map(l=>(<div className="log-item" key={l.id}><div className="log-avatar">{l.profiles?.name?.[0]}</div><div className="log-content"><div className="log-meta"><span style={{fontWeight:600,color:'#374151'}}>{l.profiles?.name}</span>{' · '}<span className={`action-${l.action}`}>{l.action==='approve'?'承認':l.action==='reject'?'却下':l.action==='process'?'承認中へ':'申請'}</span></div>{l.comment&&<div className="log-comment">{l.comment}</div>}</div></div>))}</div>)}{(canProcess||canApprove||canReject||canSubmit||canEdit||canDelete)&&(<div className="card" style={{padding:16}}>
-    {canProcess&&<button className="btn btn-warning" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={handlePDFAndProcess} disabled={loading}>📄 PDF出力 → 承認中へ</button>}
+  const steps=[{label:'申請',active:expense.status==='pending_office',done:expense.status==='approved'},{label:'承認済み',active:false,done:expense.status==='approved'}];
+  return(<div className="page"><div style={{marginBottom:16}}><button className="btn btn-secondary" onClick={onBack}>← 戻る</button></div><div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16}}><div><h2 style={{fontSize:17,fontWeight:700}}>{expense.title}</h2><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>申請者: {expense.profiles?.name}{expense.company&&<span style={{color:'#92400e',fontWeight:600,marginLeft:6}}>[{expense.company}]</span>}</div></div><Badge status={expense.status}/></div>{expense.status!=='rejected'&&(<div className="approval-flow">{steps.map((s,i)=>(<React.Fragment key={i}><div className={`flow-step ${s.active?'active':''} ${s.done?'done':''} ${s.isProcessing&&s.active?'processing':''}`}><div className="flow-step-name">{s.done?'✅':s.active?(s.isProcessing?'🔄':'🔵'):'⭕'} {s.label}</div></div>{i<steps.length-1&&<span className="flow-arrow">→</span>}</React.Fragment>))}</div>)}<div className="card" style={{padding:16,marginBottom:12}}><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>{[['金額',fmt(expense.amount)],['カテゴリ',getCat(expense.category)],['日付',fmtDate(expense.expense_date)],['登録日',fmtDate(expense.created_at)]].map(([k,v])=>(<div key={k}><div style={{fontSize:11,color:'#94a3b8',marginBottom:2}}>{k}</div><div style={{fontSize:13,fontWeight:600}}>{v}</div></div>))}</div>{expense.description&&<div style={{marginTop:12,paddingTop:12,borderTop:'1px solid #f1f5f9'}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:4}}>備考</div><div style={{fontSize:13}}>{expense.description}</div></div>}</div>{expense.batch_id&&<div className="card" style={{padding:14,marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between'}}><span style={{fontSize:13,color:'#64748b'}}>📎 まとめPDFに含まれています</span>{expense.batch_pdf_url&&<a className="btn btn-secondary btn-sm" href={expense.batch_pdf_url} target="_blank" rel="noreferrer">📄 開く</a>}</div>}{expense.receipt_url&&(<div className="card" style={{padding:14,marginBottom:12}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:8}}>領収書</div><a href={expense.receipt_url} target="_blank" rel="noreferrer"><img src={expense.receipt_url} className="receipt-preview" alt="領収書"/></a></div>)}{logs.length>0&&(<div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:13,fontWeight:600,marginBottom:12}}>承認履歴</div>{logs.map(l=>(<div className="log-item" key={l.id}><div className="log-avatar">{l.profiles?.name?.[0]}</div><div className="log-content"><div className="log-meta"><span style={{fontWeight:600,color:'#374151'}}>{l.profiles?.name}</span>{' · '}<span className={`action-${l.action}`}>{l.action==='approve'?'承認':l.action==='reject'?'却下':l.action==='process'?'承認中へ':'申請'}</span></div>{l.comment&&<div className="log-comment">{l.comment}</div>}</div></div>))}</div>)}{(canApprove||canReject||canSubmit||canEdit||canDelete)&&(<div className="card" style={{padding:16}}>
     {canApprove&&(<><textarea className="form-input" rows={2} style={{resize:'none',marginBottom:10}} value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメント（任意）"/><button className="btn btn-success" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={()=>doAction('approve')} disabled={loading}>✅ 承認済みにする</button></>)}
     {canReject&&<button className="btn btn-danger" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={()=>doAction('reject')} disabled={loading}>❌ 却下</button>}
     {canSubmit&&<button className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={()=>doAction('submit')} disabled={loading}>📤 申請する</button>}
     {canEdit&&(<div style={{display:'flex',gap:10,marginBottom:10}}><button className="btn btn-secondary" style={{flex:1,justifyContent:'center'}} onClick={()=>onEdit(expenseId)}>✏️ 編集</button><button className="btn btn-danger" style={{flex:1,justifyContent:'center'}} onClick={doDelete}>🗑 削除</button></div>)}
-    {canDelete&&!canEdit&&!canProcess&&!canApprove&&!canReject&&<button className="btn btn-danger" style={{width:'100%',justifyContent:'center',padding:'12px'}} onClick={doDelete}>🗑 この申請を削除</button>}
+    {canDelete&&!canEdit&&!canApprove&&!canReject&&<button className="btn btn-danger" style={{width:'100%',justifyContent:'center',padding:'12px'}} onClick={doDelete}>🗑 この申請を削除</button>}
   </div>)}</div>);
-}
-
-function ApprovalPage({profile,onSelect}){
-  const[expenses,setExpenses]=useState([]);const[batches,setBatches]=useState([]);const[loading,setLoading]=useState(true);const[bundlingKey,setBundlingKey]=useState(null);const[exportOpenKey,setExportOpenKey]=useState(null);const[exportingKey,setExportingKey]=useState(null);
-  useEffect(()=>{loadData()},[]);
-  async function loadData(){
-    const{data}=await sb.from('expenses').select('*,profiles(name)').in('status',['pending_office','processing']).order('created_at',{ascending:true});
-    setExpenses(data||[]);
-    const batchIds=[...new Set((data||[]).filter(e=>e.batch_id).map(e=>e.batch_id))];
-    if(batchIds.length){const{data:bd}=await sb.from('pdf_batches').select('*').in('id',batchIds);setBatches(bd||[]);}else{setBatches([]);}
-    setLoading(false);
-  }
-  const pending=expenses.filter(e=>e.status==='pending_office');
-  const processing=expenses.filter(e=>e.status==='processing');
-  const pendingGroups={};
-  pending.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(pendingGroups[key]=pendingGroups[key]||{company:e.company,day,items:[]}).items.push(e);});
-  const processingByBatch={};
-  processing.forEach(e=>{const k=e.batch_id||'nobatch';(processingByBatch[k]=processingByBatch[k]||[]).push(e);});
-  async function handleExportPDF(items,key){
-    setExportingKey(key);
-    try{
-      const blob=await generateBatchPDFBlob(items);
-      downloadBlob(blob,`umami_${(items[0].company||'').replace('株式会社','')}_${items[0].expense_date||''}.pdf`);
-    }catch(e){alert('PDF出力に失敗しました: '+e.message);}
-    setExportingKey(null);
-    setExportOpenKey(null);
-  }
-  function handleExportCSV(items,key){
-    const csv=buildGroupCSV(items);
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-    downloadBlob(blob,`umami_${(items[0].company||'').replace('株式会社','')}_${items[0].expense_date||''}.csv`);
-    setExportOpenKey(null);
-  }
-  async function handleMoveToProcessing(items){
-    setBundlingKey(items[0].id);
-    try{
-      const{data:batch,error:bErr}=await sb.from('pdf_batches').insert({company:items[0].company,created_by:profile.id,pdf_url:null,status:'processing'}).select().single();
-      if(bErr)throw bErr;
-      const ids=items.map(e=>e.id);
-      await sb.from('expenses').update({status:'processing',batch_id:batch.id}).in('id',ids);
-      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'process',comment:`${items.length}件まとめ（同日申請）`,from_status:'pending_office',to_status:'processing'})));
-      await loadData();
-    }catch(e){alert('承認中への移動に失敗しました: '+e.message);}
-    setBundlingKey(null);
-  }
-  async function approveBatch(batchId,items){
-    setLoading(true);
-    await sb.from('pdf_batches').update({status:'approved',approved_at:new Date().toISOString()}).eq('id',batchId);
-    const ids=items.map(e=>e.id);
-    await sb.from('expenses').update({status:'approved'}).in('id',ids);
-    await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:'',from_status:'processing',to_status:'approved'})));
-    await loadData();
-  }
-  async function rejectBatch(batchId,items){
-    if(!confirm('このまとめPDFを差し戻しますか？（承認待ちに戻ります）'))return;
-    setLoading(true);
-    await sb.from('pdf_batches').update({status:'rejected'}).eq('id',batchId);
-    const ids=items.map(e=>e.id);
-    await sb.from('expenses').update({status:'pending_office',batch_id:null}).in('id',ids);
-    await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'reject',comment:'まとめPDF差し戻し',from_status:'processing',to_status:'pending_office'})));
-    await loadData();
-  }
-  return(<div className="page"><div className="page-header"><div><div className="page-title">承認中</div><div className="page-sub">対応が必要な申請</div></div></div>
-    {loading&&<div className="empty">読み込み中...</div>}
-    {!loading&&expenses.length===0&&<div className="card"><div className="empty">✅ 対応が必要な申請はありません</div></div>}
-    {Object.keys(pendingGroups).length>0&&(<>
-      <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同日申請は自動でまとめられます）</div>
-      {Object.entries(pendingGroups).map(([key,group])=>{
-        const total=group.items.reduce((s,e)=>s+e.amount,0);
-        const isBundling=bundlingKey===group.items[0].id;
-        return(<div className="batch-card" key={key}>
-          <div className="batch-card-header">
-            <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ {fmtDate(group.day)}申請（{group.items.length}件・{fmt(total)}）</span>
-            <div style={{display:'flex',gap:8,position:'relative'}}>
-              <button className="btn btn-secondary btn-sm" onClick={()=>setExportOpenKey(k=>k===key?null:key)}>📄 PDF・CSVで出力する</button>
-              {exportOpenKey===key&&(<div style={{position:'absolute',top:'110%',right:0,background:'#fff',border:'1px solid #e2e8f0',borderRadius:8,boxShadow:'0 4px 12px rgba(0,0,0,.12)',padding:6,zIndex:10,display:'flex',flexDirection:'column',gap:4,minWidth:150}}>
-                <button className="btn btn-secondary btn-sm" onClick={()=>handleExportPDF(group.items,key)} disabled={exportingKey===key}>{exportingKey===key?'作成中...':'📄 PDFで出力'}</button>
-                <button className="btn btn-secondary btn-sm" onClick={()=>handleExportCSV(group.items,key)}>📊 CSV(Excel)で出力</button>
-              </div>)}
-              <button className="btn btn-warning btn-sm" onClick={()=>handleMoveToProcessing(group.items)} disabled={isBundling}>{isBundling?'処理中...':'📤 まとめて承認中へ'}</button>
-            </div>
-          </div>
-          <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
-        </div>);
-      })}
-    </>)}
-    {Object.keys(processingByBatch).length>0&&(<>
-      <div style={{fontSize:13,fontWeight:600,color:'#1d4ed8',marginBottom:8}}>🔄 承認中</div>
-      {Object.entries(processingByBatch).map(([batchKey,items])=>{
-        const batch=batches.find(b=>b.id===batchKey);
-        const total=items.reduce((s,e)=>s+e.amount,0);
-        return(<div className="batch-card" key={batchKey}>
-          <div className="batch-card-header">
-            <span className="batch-card-title">{items[0].company?.replace('株式会社','')} まとめ（{items.length}件・{fmt(total)}）</span>
-            <div style={{display:'flex',gap:8}}>
-              {batch?.pdf_url&&<a className="btn btn-secondary btn-sm" href={batch.pdf_url} target="_blank" rel="noreferrer">📄 PDF</a>}
-              <button className="btn btn-danger btn-sm" onClick={()=>rejectBatch(batchKey,items)}>差し戻し</button>
-              <button className="btn btn-success btn-sm" onClick={()=>approveBatch(batchKey,items)}>✅ 承認済みにする</button>
-            </div>
-          </div>
-          <div className="batch-card-body">{items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
-        </div>);
-      })}
-    </>)}
-  </div>);
 }
 
 function ArchivePage({profile}){
@@ -708,14 +477,13 @@ function App(){
   if(!user||!profile)return<Login onLogin={handleLogin}/>;
   if(showCompanySelect)return<CompanySelect profile={profile} onSelect={handleCompanySelect}/>;
   const isOffice=profile.role==='office';
-  const navItems=[{key:'dashboard',icon:'🏠',label:'ホーム'},{key:'expenses',icon:'📋',label:'経費一覧'},...(isOffice?[{key:'approvals',icon:'🔄',label:'承認中'}]:[]),{key:'archive',icon:'🗂',label:'アーカイブ'},{key:'reports',icon:'📊',label:'レポート'}];
-  const pageTitles={dashboard:'ダッシュボード',expenses:'経費一覧',approvals:'承認中',archive:'アーカイブ',reports:'月次レポート',detail:'経費詳細',form:editId?'経費を編集':'経費を申請',bulk:'一括申請'};
+  const navItems=[{key:'dashboard',icon:'🏠',label:'ホーム'},{key:'expenses',icon:'📋',label:'経費一覧'},{key:'archive',icon:'🗂',label:'アーカイブ'},{key:'reports',icon:'📊',label:'レポート'}];
+  const pageTitles={dashboard:'ダッシュボード',expenses:'経費一覧',archive:'アーカイブ',reports:'月次レポート',detail:'経費詳細',form:editId?'経費を編集':'経費を申請',bulk:'一括申請'};
   function renderPage(){
     if(page==='detail'&&selectedId)return<ExpenseDetail profile={profile} expenseId={selectedId} onBack={()=>{setPage('expenses');setSelectedId(null);}} onEdit={id=>{setEditId(id);setPage('form');}}/>;
     if(page==='form')return<ExpenseForm profile={profile} company={company} expenseId={editId} onSave={()=>{setPage('expenses');setEditId(null);}} onCancel={()=>{setPage('expenses');setEditId(null);}}/>;
     if(page==='bulk')return<BulkExpenseForm profile={profile} company={company} onSave={()=>setPage('expenses')} onCancel={()=>setPage('expenses')}/>;
     if(page==='expenses')return<ExpenseList profile={profile} company={company} onSelect={id=>{setSelectedId(id);setPage('detail');}} onNew={()=>{setEditId(null);setPage('form');}} onBulk={()=>setPage('bulk')}/>;
-    if(page==='approvals')return<ApprovalPage profile={profile} onSelect={id=>{setSelectedId(id);setPage('detail');}}/>;
     if(page==='archive')return<ArchivePage profile={profile}/>;
     if(page==='reports')return<ReportPage profile={profile}/>;
     return<Dashboard profile={profile} company={company}/>;
