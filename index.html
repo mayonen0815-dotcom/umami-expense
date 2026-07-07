@@ -256,19 +256,34 @@ function Dashboard({profile,company}){
 }
 
 function ExpenseList({profile,company,onSelect,onNew,onBulk}){
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const[statusFilter,setStatusFilter]=useState('');const[personFilter,setPersonFilter]=useState('');const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState(company||'');const[bundlingKey,setBundlingKey]=useState(null);
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const[statusFilter,setStatusFilter]=useState('');const[personFilter,setPersonFilter]=useState('');const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState(company||'');const[bundlingKey,setBundlingKey]=useState(null);const[draftSelected,setDraftSelected]=useState({});const[submittingDrafts,setSubmittingDrafts]=useState(false);
   useEffect(()=>{loadData()},[]);
-  async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(company)q=q.eq('company',company);const{data}=await q.order('created_at',{ascending:false});setExpenses(data||[]);setLoading(false);}
+  async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(company)q=q.eq('company',company);const{data}=await q.order('created_at',{ascending:false});setExpenses(data||[]);setDraftSelected({});setLoading(false);}
   const personList=[...new Set(expenses.map(e=>e.profiles?.name).filter(Boolean))];
   const monthList=[...new Set(expenses.map(e=>e.expense_date?.slice(0,7)).filter(Boolean))].sort().reverse();
   function getFiltered(){return expenses.filter(e=>{const ms=!search||e.title.toLowerCase().includes(search.toLowerCase())||e.profiles?.name?.toLowerCase().includes(search.toLowerCase());const mf=!statusFilter||e.status===statusFilter;const mp=!personFilter||e.profiles?.name===personFilter;const mm=!monthFilter||e.expense_date?.startsWith(monthFilter);const mc=!companyFilter||e.company===companyFilter;return ms&&mf&&mp&&mm&&mc;});}
   const filtered=getFiltered();
   const isOffice=profile.role==='office';
+  const isStaff=profile.role==='staff';
+  const showDraftPicker=isStaff&&(!statusFilter||statusFilter==='draft');
+  const draftItems=showDraftPicker?filtered.filter(e=>e.status==='draft'):[];
   const showGrouping=(!statusFilter||statusFilter==='pending_office');
   const pendingItems=showGrouping?filtered.filter(e=>e.status==='pending_office'):[];
-  const otherItems=showGrouping?filtered.filter(e=>e.status!=='pending_office'):filtered;
+  const otherItems=filtered.filter(e=>!(showGrouping&&e.status==='pending_office')&&!(showDraftPicker&&e.status==='draft'));
   const groups={};
   pendingItems.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
+  function toggleDraft(id){setDraftSelected(s=>({...s,[id]:!s[id]}));}
+  const selectedDraftIds=Object.keys(draftSelected).filter(id=>draftSelected[id]);
+  async function handleSubmitDrafts(){
+    if(selectedDraftIds.length===0)return;
+    setSubmittingDrafts(true);
+    try{
+      await sb.from('expenses').update({status:'pending_office'}).in('id',selectedDraftIds);
+      await sb.from('approval_logs').insert(selectedDraftIds.map(id=>({expense_id:id,actor_id:profile.id,action:'submit',comment:'',from_status:'draft',to_status:'pending_office'})));
+      await loadData();
+    }catch(e){alert('送信に失敗しました: '+e.message);}
+    setSubmittingDrafts(false);
+  }
   async function handleBundleGroup(items){
     setBundlingKey(items[0].id);
     try{
@@ -291,6 +306,11 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
       {!company&&(<select className="form-input" style={{width:110,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select>)}
     </div>
     {loading?<div className="table-wrap"><div className="empty">読み込み中...</div></div>:(<>
+      {showDraftPicker&&draftItems.length>0&&(<>
+        <div style={{fontSize:13,fontWeight:600,color:'#475569',marginBottom:8}}>📝 下書き（選んで事務所に送れます）</div>
+        {selectedDraftIds.length>0&&(<div className="select-bar"><span className="select-bar-text">{selectedDraftIds.length}件選択中</span><button className="btn btn-primary btn-sm" onClick={handleSubmitDrafts} disabled={submittingDrafts}>{submittingDrafts?'送信中...':'📤 選択した申請を事務所に送る'}</button></div>)}
+        <div className="table-wrap" style={{marginBottom:16}}>{draftItems.map(e=>(<div className="expense-row" key={e.id}><input type="checkbox" className="checkbox" checked={!!draftSelected[e.id]} onChange={()=>toggleDraft(e.id)}/><span className="expense-title" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span><Badge status={e.status}/></div>))}</div>
+      </>)}
       {showGrouping&&Object.keys(groups).length>0&&(<>
         <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同日申請はまとめて表示されます）</div>
         {Object.entries(groups).map(([key,group])=>{
@@ -306,7 +326,7 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
         })}
       </>)}
       <div className="table-wrap">
-        {otherItems.length===0?(showGrouping&&Object.keys(groups).length>0?null:<div className="empty">申請がありません</div>):otherItems.map(e=>(
+        {otherItems.length===0?(((showGrouping&&Object.keys(groups).length>0)||(showDraftPicker&&draftItems.length>0))?null:<div className="empty">申請がありません</div>):otherItems.map(e=>(
           <div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>
             <span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span>
             <span className="expense-name">{e.profiles?.name||''}</span>
