@@ -256,7 +256,7 @@ function Dashboard({profile,company}){
 }
 
 function ExpenseList({profile,company,onSelect,onNew,onBulk}){
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const[statusFilter,setStatusFilter]=useState('');const[personFilter,setPersonFilter]=useState('');const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState(company||'');const[bundlingKey,setBundlingKey]=useState(null);const[selectMode,setSelectMode]=useState(false);const[selected,setSelected]=useState({});const[submitting,setSubmitting]=useState(false);
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[search,setSearch]=useState('');const[statusFilter,setStatusFilter]=useState('');const[personFilter,setPersonFilter]=useState('');const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState(company||'');const[bundlingKey,setBundlingKey]=useState(null);const[mode,setMode]=useState('none');const[selected,setSelected]=useState({});const[busy,setBusy]=useState(false);
   useEffect(()=>{loadData()},[]);
   async function loadData(){setLoading(true);let q=sb.from('expenses').select('*,profiles(name)');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(company)q=q.eq('company',company);const{data}=await q.order('created_at',{ascending:false});setExpenses(data||[]);setSelected({});setLoading(false);}
   const personList=[...new Set(expenses.map(e=>e.profiles?.name).filter(Boolean))];
@@ -266,17 +266,20 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
   const isOffice=profile.role==='office';
   const isStaff=profile.role==='staff';
   const submittableStatuses=['draft','rejected','pending_office'];
-  const showGrouping=!selectMode&&(!statusFilter||statusFilter==='pending_office');
+  const deletableStatuses=isOffice?Object.keys(STATUS):['draft','rejected'];
+  const eligibleStatuses=mode==='delete'?deletableStatuses:mode==='submit'?submittableStatuses:[];
+  const showGrouping=mode==='none'&&(!statusFilter||statusFilter==='pending_office');
   const pendingItems=showGrouping?filtered.filter(e=>e.status==='pending_office'):[];
   const otherItems=filtered.filter(e=>!(showGrouping&&e.status==='pending_office'));
   const groups={};
   pendingItems.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
   function toggleSelect(id){setSelected(s=>({...s,[id]:!s[id]}));}
   const selectedIds=Object.keys(selected).filter(id=>selected[id]);
+  function switchMode(next){setMode(m=>m===next?'none':next);setSelected({});}
   async function handleSubmitSelected(){
     const items=filtered.filter(e=>selectedIds.includes(e.id));
     if(items.length===0)return;
-    setSubmitting(true);
+    setBusy(true);
     try{
       const pdf_url=await generateAndUploadBatchPDF(items,profile.id);
       const{data:batch,error:bErr}=await sb.from('pdf_batches').insert({company:items[0].company,created_by:profile.id,pdf_url,status:'processing'}).select().single();
@@ -284,10 +287,21 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
       const ids=items.map(e=>e.id);
       await sb.from('expenses').update({status:'processing',batch_id:batch.id}).in('id',ids);
       await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'process',comment:`${items.length}件を経費提出`,from_status:e.status,to_status:'processing'})));
-      setSelectMode(false);
+      setMode('none');
       await loadData();
     }catch(e){alert('経費提出に失敗しました: '+e.message);}
-    setSubmitting(false);
+    setBusy(false);
+  }
+  async function handleConfirmDelete(){
+    if(selectedIds.length===0)return;
+    if(!confirm(`選択した${selectedIds.length}件を削除しますか？（元に戻せません）`))return;
+    setBusy(true);
+    try{
+      await sb.from('expenses').delete().in('id',selectedIds);
+      setMode('none');
+      await loadData();
+    }catch(e){alert('削除に失敗しました: '+e.message);}
+    setBusy(false);
   }
   async function handleBundleGroup(items){
     setBundlingKey(items[0].id);
@@ -302,8 +316,9 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     }catch(e){alert('まとめPDFの作成に失敗しました: '+e.message);}
     setBundlingKey(null);
   }
-  return(<div className="page"><div className="page-header"><div className="page-title">経費一覧</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{isStaff&&<button className={selectMode?'btn btn-primary':'btn btn-secondary'} onClick={()=>{setSelectMode(m=>!m);setSelected({});}}>✅ 経費申請</button>}{isStaff&&<button className="btn btn-secondary" onClick={onBulk}>📷 一括申請</button>}{isStaff&&<button className="btn btn-primary" onClick={onNew}>＋ 申請</button>}</div></div>
-    {selectMode&&(<div className="select-bar"><span className="select-bar-text">{selectedIds.length}件選択中（下書き・承認待ち・却下が選択できます）</span><button className="btn btn-primary btn-sm" onClick={handleSubmitSelected} disabled={submitting||selectedIds.length===0}>{submitting?'送信中...':'📤 経費提出'}</button></div>)}
+  return(<div className="page"><div className="page-header"><div className="page-title">経費一覧</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{isStaff&&<button className={mode==='submit'?'btn btn-primary':'btn btn-secondary'} onClick={()=>switchMode('submit')}>✅ 経費申請</button>}<button className={mode==='delete'?'btn btn-danger':'btn btn-secondary'} onClick={()=>switchMode('delete')}>🗑 経費削除</button>{isStaff&&<button className="btn btn-secondary" onClick={onBulk}>📷 一括申請</button>}{isStaff&&<button className="btn btn-primary" onClick={onNew}>＋ 申請</button>}</div></div>
+    {mode==='submit'&&(<div className="select-bar"><span className="select-bar-text">{selectedIds.length}件選択中（下書き・承認待ち・却下が選択できます）</span><button className="btn btn-primary btn-sm" onClick={handleSubmitSelected} disabled={busy||selectedIds.length===0}>{busy?'送信中...':'📤 経費提出'}</button></div>)}
+    {mode==='delete'&&(<div className="select-bar" style={{background:'#fee2e2',borderColor:'#fecaca'}}><span className="select-bar-text" style={{color:'#991b1b'}}>{selectedIds.length}件選択中{isStaff?'（下書き・却下のみ）':''}</span><button className="btn btn-danger btn-sm" onClick={handleConfirmDelete} disabled={busy||selectedIds.length===0}>{busy?'削除中...':'🗑 確定'}</button></div>)}
     <div className="filter-row">
       <div className="search-wrap"><span className="search-icon">🔍</span><input className="form-input search-input" placeholder="検索..." value={search} onChange={e=>setSearch(e.target.value)}/></div>
       <select className="form-input" style={{width:110,fontSize:13}} value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">全ステータス</option>{Object.entries(STATUS).map(([v,s])=><option key={v} value={v}>{s.label}</option>)}</select>
@@ -322,23 +337,15 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
               <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ {fmtDate(group.day)}申請（{group.items.length}件・{fmt(total)}）</span>
               {isOffice&&<button className="btn btn-warning btn-sm" onClick={()=>handleBundleGroup(group.items)} disabled={isBundling}>{isBundling?'PDF作成中...':group.items.length>1?'📄 まとめて承認中へ':'📄 承認中へ'}</button>}
             </div>
-            <div className="batch-card-body">{group.items.map(e=>{
-              const canPick=selectMode&&isStaff&&submittableStatuses.includes(e.status);
-              return(<div className="expense-row" key={e.id} style={{cursor:canPick?'default':'pointer'}} onClick={canPick?undefined:()=>onSelect(e.id)}>
-                {selectMode&&isStaff&&<input type="checkbox" className="checkbox" checked={!!selected[e.id]} onChange={()=>toggleSelect(e.id)}/>}
-                <span className="expense-name" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.profiles?.name||''}</span>
-                <span className="expense-title" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.title}</span>
-                <span className="expense-amount">{fmt(e.amount)}</span>
-              </div>);
-            })}</div>
+            <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
           </div>);
         })}
       </>)}
       <div className="table-wrap">
         {otherItems.length===0?(showGrouping&&Object.keys(groups).length>0?null:<div className="empty">申請がありません</div>):otherItems.map(e=>{
-          const canPick=selectMode&&isStaff&&submittableStatuses.includes(e.status);
+          const canPick=mode!=='none'&&eligibleStatuses.includes(e.status);
           return(<div className="expense-row" key={e.id} style={{cursor:canPick?'default':'pointer'}} onClick={canPick?undefined:()=>onSelect(e.id)}>
-            {selectMode&&(canPick?<input type="checkbox" className="checkbox" checked={!!selected[e.id]} onChange={()=>toggleSelect(e.id)}/>:<span style={{width:16,display:'inline-block'}}/>)}
+            {mode!=='none'&&(canPick?<input type="checkbox" className="checkbox" checked={!!selected[e.id]} onChange={()=>toggleSelect(e.id)}/>:<span style={{width:16,display:'inline-block'}}/>)}
             <span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span>
             <span className="expense-name">{e.profiles?.name||''}</span>
             <span className="expense-title" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.title}</span>
