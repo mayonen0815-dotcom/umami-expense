@@ -173,7 +173,7 @@ const SUPABASE_KEY='sb_publishable_4IKc7bIsEwvbVSNdbPK9Jw_nI2MzKd2';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const COMPANIES=[{value:'株式会社UMAMI',label:'株式会社UMAMI',icon:'🏢',color:'#dbeafe'},{value:'株式会社RIC2',label:'株式会社RIC2',icon:'🏗',color:'#dcfce7'},{value:'株式会社MOK',label:'株式会社MOK',icon:'🏬',color:'#fef3c7'}];
 const CATEGORIES=[{value:'entertainment',label:'交際費'},{value:'transport',label:'交通費'},{value:'accommodation',label:'宿泊費'},{value:'other',label:'その他'}];
-const STATUS={draft:{label:'下書き',badge:'badge-draft'},pending_office:{label:'承認待ち',badge:'badge-pending'},processing:{label:'承認中',badge:'badge-processing'},approved:{label:'承認済み',badge:'badge-approved'},rejected:{label:'却下',badge:'badge-rejected'}};
+const STATUS={draft:{label:'下書き',badge:'badge-draft'},pending_office:{label:'承認待ち',badge:'badge-pending'},processing:{label:'承認中',badge:'badge-processing'},approved:{label:'承認中',badge:'badge-processing'},archived:{label:'承認済み',badge:'badge-approved'},rejected:{label:'却下',badge:'badge-rejected'}};
 const ROLE_LABELS={staff:'現場',office:'事務所'};
 const ROLE_BADGE={staff:'role-staff',office:'role-office'};
 const CAT_COLORS=['#ec4899','#3b82f6','#8b5cf6','#f59e0b'];
@@ -276,7 +276,7 @@ function CompanySelect({profile,onSelect}){
 function Dashboard({profile,company}){
   const[stats,setStats]=useState({total:0,pending:0,processing:0,approved:0});const[recent,setRecent]=useState([]);const[loading,setLoading]=useState(true);
   useEffect(()=>{loadData()},[]);
-  async function loadData(){let q=sb.from('expenses').select('*,profiles(name)');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(company)q=q.eq('company',company);const{data}=await q.order('created_at',{ascending:false}).limit(5);setRecent(data||[]);let sq=sb.from('expenses').select('status');if(profile.role==='staff')sq=sq.eq('user_id',profile.id);if(company)sq=sq.eq('company',company);const{data:all}=await sq;if(all)setStats({total:all.length,pending:all.filter(e=>e.status==='pending_office').length,processing:all.filter(e=>e.status==='processing').length,approved:all.filter(e=>e.status==='approved').length});setLoading(false);}
+  async function loadData(){let q=sb.from('expenses').select('*,profiles(name)');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(company)q=q.eq('company',company);const{data}=await q.order('created_at',{ascending:false}).limit(5);setRecent(data||[]);let sq=sb.from('expenses').select('status');if(profile.role==='staff')sq=sq.eq('user_id',profile.id);if(company)sq=sq.eq('company',company);const{data:all}=await sq;if(all)setStats({total:all.length,pending:all.filter(e=>e.status==='pending_office').length,processing:all.filter(e=>e.status==='approved').length,approved:all.filter(e=>e.status==='archived').length});setLoading(false);}
   const cards=[{label:'総件数',value:stats.total,icon:'📋',bg:'#eff6ff'},{label:'承認待ち',value:stats.pending,icon:'⏳',bg:'#fefce8'},{label:'承認中',value:stats.processing,icon:'🔄',bg:'#dbeafe'},{label:'承認済み',value:stats.approved,icon:'✅',bg:'#f0fdf4'}];
   return(<div className="page"><div className="page-header"><div><div className="page-title">ダッシュボード</div><div className="page-sub">こんにちは、{profile.name} さん{company?` ／ ${company}`:''}</div></div></div><div className="stats">{cards.map(c=>(<div className="stat-card" key={c.label}><div className="stat-icon" style={{background:c.bg}}>{c.icon}</div><div className="stat-value">{loading?'—':c.value}</div><div className="stat-label">{c.label}</div></div>))}</div><div className="card"><div style={{padding:'14px 16px',borderBottom:'1px solid #f1f5f9',fontWeight:600,fontSize:14}}>最近の申請</div>{loading?<div className="empty">読み込み中...</div>:recent.length===0?<div className="empty">申請がありません</div>:recent.map(e=>(<div className="expense-row" key={e.id}><span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span><Badge status={e.status}/></div>))}</div></div>);
 }
@@ -362,7 +362,7 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
               <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ {fmtDate(group.day)}申請（{group.items.length}件・{fmt(total)}）</span>
               {isOffice&&(<div style={{display:'flex',gap:8}}>
                 <button className="btn btn-secondary btn-sm" onClick={()=>handleExportCSV(group.items)}>📊 CSVで出力</button>
-                <button className="btn btn-success btn-sm" onClick={()=>handleApproveGroup(group.items,key)} disabled={isApproving}>{isApproving?'処理中...':'✅ まとめて承認済みにする'}</button>
+                <button className="btn btn-success btn-sm" onClick={()=>handleApproveGroup(group.items,key)} disabled={isApproving}>{isApproving?'処理中...':'✅ 申請する'}</button>
               </div>)}
             </div>
             <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}><span className="expense-name">{e.profiles?.name||''}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
@@ -437,7 +437,7 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
   const canEdit=profile.role==='staff'&&['draft','rejected'].includes(expense.status)&&expense.user_id===profile.id;
   const canOfficeFix=isOffice;
   const canDelete=isOffice;
-  const steps=[{label:'申請',active:expense.status==='pending_office',done:expense.status==='approved'},{label:'承認済み',active:false,done:expense.status==='approved'}];
+  const steps=[{label:'申請',active:expense.status==='pending_office',done:['approved','archived'].includes(expense.status)},{label:'承認中',active:expense.status==='approved',done:expense.status==='archived'},{label:'承認済み',active:false,done:expense.status==='archived'}];
   return(<div className="page"><div style={{marginBottom:16}}><button className="btn btn-secondary" onClick={onBack}>← 戻る</button></div><div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16}}><div><h2 style={{fontSize:17,fontWeight:700}}>{expense.title}</h2><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>申請者: {expense.profiles?.name}{expense.company&&<span style={{color:'#92400e',fontWeight:600,marginLeft:6}}>[{expense.company}]</span>}</div></div><Badge status={expense.status}/></div>{expense.status!=='rejected'&&(<div className="approval-flow">{steps.map((s,i)=>(<React.Fragment key={i}><div className={`flow-step ${s.active?'active':''} ${s.done?'done':''} ${s.isProcessing&&s.active?'processing':''}`}><div className="flow-step-name">{s.done?'✅':s.active?(s.isProcessing?'🔄':'🔵'):'⭕'} {s.label}</div></div>{i<steps.length-1&&<span className="flow-arrow">→</span>}</React.Fragment>))}</div>)}<div className="card" style={{padding:16,marginBottom:12}}><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>{[['金額',fmt(expense.amount)],['カテゴリ',getCat(expense.category)],['日付',fmtDate(expense.expense_date)],['登録日',fmtDate(expense.created_at)]].map(([k,v])=>(<div key={k}><div style={{fontSize:11,color:'#94a3b8',marginBottom:2}}>{k}</div><div style={{fontSize:13,fontWeight:600}}>{v}</div></div>))}</div>{expense.description&&<div style={{marginTop:12,paddingTop:12,borderTop:'1px solid #f1f5f9'}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:4}}>備考</div><div style={{fontSize:13}}>{expense.description}</div></div>}</div>{expense.batch_id&&<div className="card" style={{padding:14,marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between'}}><span style={{fontSize:13,color:'#64748b'}}>📎 まとめPDFに含まれています</span>{expense.batch_pdf_url&&<a className="btn btn-secondary btn-sm" href={expense.batch_pdf_url} target="_blank" rel="noreferrer">📄 開く</a>}</div>}{expense.receipt_url&&(<div className="card" style={{padding:14,marginBottom:12}}><div style={{fontSize:11,color:'#94a3b8',marginBottom:8}}>領収書</div><a href={expense.receipt_url} target="_blank" rel="noreferrer"><img src={expense.receipt_url} className="receipt-preview" alt="領収書"/></a></div>)}{logs.length>0&&(<div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:13,fontWeight:600,marginBottom:12}}>承認履歴</div>{logs.map(l=>(<div className="log-item" key={l.id}><div className="log-avatar">{l.profiles?.name?.[0]}</div><div className="log-content"><div className="log-meta"><span style={{fontWeight:600,color:'#374151'}}>{l.profiles?.name}</span>{' · '}<span className={`action-${l.action}`}>{l.action==='approve'?'承認':l.action==='reject'?'却下':l.action==='process'?'承認中へ':'申請'}</span></div>{l.comment&&<div className="log-comment">{l.comment}</div>}</div></div>))}</div>)}{(canApprove||canReject||canSubmit||canEdit||canDelete||canOfficeFix)&&(<div className="card" style={{padding:16}}>
     {canApprove&&(<><textarea className="form-input" rows={2} style={{resize:'none',marginBottom:10}} value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメント（任意）"/><button className="btn btn-success" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={()=>doAction('approve')} disabled={loading}>✅ 承認済みにする</button></>)}
     {canReject&&<button className="btn btn-danger" style={{width:'100%',justifyContent:'center',padding:'12px',marginBottom:10}} onClick={()=>doAction('reject')} disabled={loading}>❌ 却下</button>}
@@ -449,7 +449,7 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
 }
 
 function ArchivePage({profile}){
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[pickerKey,setPickerKey]=useState(null);const[fixingKey,setFixingKey]=useState(null);
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[pickerKey,setPickerKey]=useState(null);const[fixingKey,setFixingKey]=useState(null);const[archivingKey,setArchivingKey]=useState(null);
   useEffect(()=>{loadData()},[monthFilter,companyFilter]);
   async function loadData(){
     setLoading(true);
@@ -473,11 +473,76 @@ function ArchivePage({profile}){
     }catch(e){alert('法人の更新に失敗しました: '+e.message);}
     setFixingKey(null);
   }
+  async function handleMoveToArchived(items,key){
+    setArchivingKey(key);
+    try{
+      const ids=items.map(e=>e.id);
+      await sb.from('expenses').update({status:'archived'}).in('id',ids);
+      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:'承認済みへ移動',from_status:'approved',to_status:'archived'})));
+      await loadData();
+    }catch(e){alert('移動に失敗しました: '+e.message);}
+    setArchivingKey(null);
+  }
   const total=expenses.reduce((s,e)=>s+e.amount,0);
   const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
   const groups={};
   expenses.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
-  return(<div className="page"><div className="page-header"><div><div className="page-title">アーカイブ</div><div className="page-sub">承認済みの経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.length>0&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認済み {expenses.length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
+  return(<div className="page"><div className="page-header"><div><div className="page-title">承認中</div><div className="page-sub">最終承認待ちの経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.length>0&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認中 {expenses.length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
+    {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">承認中の経費はありません</div></div>:(
+      Object.entries(groups).map(([key,group])=>{
+        const t=group.items.reduce((s,e)=>s+e.amount,0);
+        const names=[...new Set(group.items.map(e=>e.profiles?.name).filter(Boolean))].join('・');
+        const isFixing=fixingKey===key;
+        const isArchiving=archivingKey===key;
+        return(<div className="batch-card" key={key}>
+          <div className="batch-card-header" style={{position:'relative'}}>
+            <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'}｜{names}｜{fmt(t)}</span>
+            <div style={{display:'flex',gap:8,position:'relative'}}>
+              <button className="btn btn-secondary btn-sm" onClick={()=>setPickerKey(k=>k===key?null:key)} disabled={isFixing}>{isFixing?'作成中...':'📄 PDF（まとめ）'}</button>
+              {pickerKey===key&&(<div style={{position:'absolute',top:'110%',left:0,background:'#fff',border:'1px solid #e2e8f0',borderRadius:8,boxShadow:'0 4px 12px rgba(0,0,0,.12)',padding:6,zIndex:10,display:'flex',flexDirection:'column',gap:4,minWidth:140}}>
+                <div style={{fontSize:11,color:'#64748b',padding:'2px 6px'}}>どの法人で出力？</div>
+                {COMPANIES.map(c=>(<button key={c.value} className="btn btn-secondary btn-sm" onClick={()=>handlePickCompanyAndPrint(group.items,key,c.value)}>{c.icon} {c.label.replace('株式会社','')}</button>))}
+              </div>)}
+              <button className="btn btn-success btn-sm" onClick={()=>handleMoveToArchived(group.items,key)} disabled={isArchiving}>{isArchiving?'処理中...':'✅ 承認済みへ'}</button>
+            </div>
+          </div>
+          <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
+        </div>);
+      })
+    )}
+  </div>);
+}
+
+function ArchivedPage({profile}){
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[pickerKey,setPickerKey]=useState(null);const[fixingKey,setFixingKey]=useState(null);
+  useEffect(()=>{loadData()},[monthFilter,companyFilter]);
+  async function loadData(){
+    setLoading(true);
+    let q=sb.from('expenses').select('*,profiles(name)').eq('status','archived');
+    if(profile.role==='staff')q=q.eq('user_id',profile.id);
+    if(monthFilter){const start=monthFilter+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);q=q.gte('expense_date',start).lte('expense_date',end);}
+    if(companyFilter)q=q.eq('company',companyFilter);
+    const{data}=await q.order('expense_date',{ascending:false});
+    setExpenses(data||[]);
+    setLoading(false);
+  }
+  async function handlePickCompanyAndPrint(items,key,companyValue){
+    setFixingKey(key);
+    try{
+      const ids=items.map(e=>e.id);
+      await sb.from('expenses').update({company:companyValue}).in('id',ids);
+      const updatedItems=items.map(e=>({...e,company:companyValue}));
+      printGroupPDF(updatedItems);
+      setPickerKey(null);
+      await loadData();
+    }catch(e){alert('法人の更新に失敗しました: '+e.message);}
+    setFixingKey(null);
+  }
+  const total=expenses.reduce((s,e)=>s+e.amount,0);
+  const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
+  const groups={};
+  expenses.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
+  return(<div className="page"><div className="page-header"><div><div className="page-title">承認済み</div><div className="page-sub">最終承認が完了した経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.length>0&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認済み {expenses.length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
     {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">承認済みの経費はありません</div></div>:(
       Object.entries(groups).map(([key,group])=>{
         const t=group.items.reduce((s,e)=>s+e.amount,0);
@@ -504,7 +569,7 @@ function ArchivePage({profile}){
 function ReportPage({profile}){
   const[month,setMonth]=useState(new Date().toISOString().slice(0,7));const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[companyFilter,setCompanyFilter]=useState('');
   useEffect(()=>{loadData()},[month,companyFilter]);
-  async function loadData(){setLoading(true);const start=month+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);let q=sb.from('expenses').select('*').gte('expense_date',start).lte('expense_date',end).eq('status','approved');if(profile.role==='staff')q=q.eq('user_id',profile.id);if(companyFilter)q=q.eq('company',companyFilter);const{data}=await q;setExpenses(data||[]);setLoading(false);}
+  async function loadData(){setLoading(true);const start=month+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);let q=sb.from('expenses').select('*').gte('expense_date',start).lte('expense_date',end).in('status',['approved','archived']);if(profile.role==='staff')q=q.eq('user_id',profile.id);if(companyFilter)q=q.eq('company',companyFilter);const{data}=await q;setExpenses(data||[]);setLoading(false);}
   const total=expenses.reduce((s,e)=>s+e.amount,0);
   const byCat=CATEGORIES.map((cat,i)=>{const amount=expenses.filter(e=>e.category===cat.value).reduce((s,e)=>s+e.amount,0);return{...cat,amount,color:CAT_COLORS[i%CAT_COLORS.length],pct:total?Math.round(amount/total*100):0};}).filter(c=>c.amount>0).sort((a,b)=>b.amount-a.amount);
   const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
@@ -525,14 +590,15 @@ function App(){
   if(!user||!profile)return<Login onLogin={handleLogin}/>;
   if(showCompanySelect)return<CompanySelect profile={profile} onSelect={handleCompanySelect}/>;
   const isOffice=profile.role==='office';
-  const navItems=[{key:'dashboard',icon:'🏠',label:'ホーム'},{key:'expenses',icon:'📋',label:'経費一覧'},{key:'archive',icon:'🗂',label:'アーカイブ'},{key:'reports',icon:'📊',label:'レポート'}];
-  const pageTitles={dashboard:'ダッシュボード',expenses:'経費一覧',archive:'アーカイブ',reports:'月次レポート',detail:'経費詳細',form:editId?'経費を編集':'経費を申請',bulk:'一括申請'};
+  const navItems=[{key:'dashboard',icon:'🏠',label:'ホーム'},{key:'expenses',icon:'📋',label:'経費一覧'},{key:'archive',icon:'🗂',label:'承認中'},{key:'archived',icon:'✅',label:'承認済み'},{key:'reports',icon:'📊',label:'レポート'}];
+  const pageTitles={dashboard:'ダッシュボード',expenses:'経費一覧',archive:'承認中',archived:'承認済み',reports:'月次レポート',detail:'経費詳細',form:editId?'経費を編集':'経費を申請',bulk:'一括申請'};
   function renderPage(){
     if(page==='detail'&&selectedId)return<ExpenseDetail profile={profile} expenseId={selectedId} onBack={()=>{setPage('expenses');setSelectedId(null);}} onEdit={id=>{setEditId(id);setPage('form');}}/>;
     if(page==='form')return<ExpenseForm profile={profile} company={company} expenseId={editId} onSave={()=>{setPage('expenses');setEditId(null);}} onCancel={()=>{setPage('expenses');setEditId(null);}}/>;
     if(page==='bulk')return<BulkExpenseForm profile={profile} company={company} onSave={()=>setPage('expenses')} onCancel={()=>setPage('expenses')}/>;
     if(page==='expenses')return<ExpenseList profile={profile} company={company} onSelect={id=>{setSelectedId(id);setPage('detail');}} onNew={()=>{setEditId(null);setPage('form');}} onBulk={()=>setPage('bulk')}/>;
     if(page==='archive')return<ArchivePage profile={profile}/>;
+    if(page==='archived')return<ArchivedPage profile={profile}/>;
     if(page==='reports')return<ReportPage profile={profile}/>;
     return<Dashboard profile={profile} company={company}/>;
   }
