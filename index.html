@@ -212,6 +212,7 @@ function printGroupPDF(items){
       ${s.items.map(e=>`<tr><td>${shortDate(e.expense_date)}</td><td>${e.title}</td><td style="text-align:right">¥${e.amount.toLocaleString()}</td><td>${e.description||''}</td></tr>`).join('')}
     </table>`).join('');
   const withReceipt=items.filter(e=>e.receipt_url);
+  const thumbGrid=withReceipt.length?`<div class="thumb-section"><div class="thumb-title">領収書サムネイル（${withReceipt.length}件）</div><div class="thumb-grid">${withReceipt.map(e=>`<div class="thumb-item"><img src="${e.receipt_url}"/><p>${shortDate(e.expense_date)} ${e.title}</p></div>`).join('')}</div></div>`:'';
   const receiptPages=withReceipt.map(e=>`<div class="receipt-page"><img src="${e.receipt_url}"/></div>`).join('');
   const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><style>
     body{font-family:'MS Gothic','Hiragino Sans',sans-serif;font-size:11px;margin:20px;color:#000}
@@ -224,6 +225,12 @@ function printGroupPDF(items){
     .sec-head{background:#e5e5e5}
     .sec-head th{font-weight:bold;text-align:left}
     .sec-head th:first-child{text-align:center}
+    .thumb-section{margin-top:14px;border-top:2px solid #000;padding-top:10px}
+    .thumb-title{font-size:12px;font-weight:bold;margin-bottom:8px}
+    .thumb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .thumb-item{text-align:center}
+    .thumb-item img{width:100%;height:100px;object-fit:cover;border:1px solid #000;display:block}
+    .thumb-item p{font-size:7px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .receipt-section{margin-top:10px}
     .receipt-title{font-size:13px;font-weight:bold;margin:16px 0 10px;border-top:2px solid #000;padding-top:12px}
     .receipt-page{page-break-before:always;text-align:center;padding-top:10px}
@@ -239,6 +246,7 @@ function printGroupPDF(items){
       <div class="total-box">¥${total.toLocaleString()}</div>
     </div>
     ${sectionsHtml}
+    ${thumbGrid}
     ${withReceipt.length?`<div class="receipt-title">領収書（${withReceipt.length}件）</div>${receiptPages}`:''}
     <script>window.onload=function(){window.print()}<\/script>
   </body></html>`;
@@ -449,6 +457,7 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
 }
 
 function ArchivePage({profile}){
+  const isOffice=profile.role==='office';
   const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[pickerKey,setPickerKey]=useState(null);const[fixingKey,setFixingKey]=useState(null);const[archivingKey,setArchivingKey]=useState(null);
   useEffect(()=>{loadData()},[monthFilter,companyFilter]);
   async function loadData(){
@@ -498,12 +507,14 @@ function ArchivePage({profile}){
           <div className="batch-card-header" style={{position:'relative'}}>
             <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'}｜{names}｜{fmt(t)}</span>
             <div style={{display:'flex',gap:8,position:'relative'}}>
+              {isOffice&&(<>
               <button className="btn btn-secondary btn-sm" onClick={()=>setPickerKey(k=>k===key?null:key)} disabled={isFixing}>{isFixing?'作成中...':'📄 PDF（まとめ）'}</button>
               {pickerKey===key&&(<div style={{position:'absolute',top:'110%',left:0,background:'#fff',border:'1px solid #e2e8f0',borderRadius:8,boxShadow:'0 4px 12px rgba(0,0,0,.12)',padding:6,zIndex:10,display:'flex',flexDirection:'column',gap:4,minWidth:140}}>
                 <div style={{fontSize:11,color:'#64748b',padding:'2px 6px'}}>どの法人で出力？</div>
                 {COMPANIES.map(c=>(<button key={c.value} className="btn btn-secondary btn-sm" onClick={()=>handlePickCompanyAndPrint(group.items,key,c.value)}>{c.icon} {c.label.replace('株式会社','')}</button>))}
               </div>)}
               <button className="btn btn-success btn-sm" onClick={()=>handleMoveToArchived(group.items,key)} disabled={isArchiving}>{isArchiving?'処理中...':'✅ 承認済みへ'}</button>
+              </>)}
             </div>
           </div>
           <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
@@ -514,6 +525,7 @@ function ArchivePage({profile}){
 }
 
 function ArchivedPage({profile}){
+  const isOffice=profile.role==='office';
   const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[pickerKey,setPickerKey]=useState(null);const[fixingKey,setFixingKey]=useState(null);
   useEffect(()=>{loadData()},[monthFilter,companyFilter]);
   async function loadData(){
@@ -552,11 +564,13 @@ function ArchivedPage({profile}){
           <div className="batch-card-header" style={{position:'relative'}}>
             <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'}｜{names}｜{fmt(t)}</span>
             <div style={{position:'relative'}}>
+              {isOffice&&(<>
               <button className="btn btn-secondary btn-sm" onClick={()=>setPickerKey(k=>k===key?null:key)} disabled={isFixing}>{isFixing?'作成中...':'📄 PDF（まとめ）'}</button>
               {pickerKey===key&&(<div style={{position:'absolute',top:'110%',right:0,background:'#fff',border:'1px solid #e2e8f0',borderRadius:8,boxShadow:'0 4px 12px rgba(0,0,0,.12)',padding:6,zIndex:10,display:'flex',flexDirection:'column',gap:4,minWidth:140}}>
                 <div style={{fontSize:11,color:'#64748b',padding:'2px 6px'}}>どの法人で出力？</div>
                 {COMPANIES.map(c=>(<button key={c.value} className="btn btn-secondary btn-sm" onClick={()=>handlePickCompanyAndPrint(group.items,key,c.value)}>{c.icon} {c.label.replace('株式会社','')}</button>))}
               </div>)}
+              </>)}
             </div>
           </div>
           <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
