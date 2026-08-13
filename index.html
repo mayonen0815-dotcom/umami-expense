@@ -271,18 +271,17 @@ function buildGroupCSV(items){
   return '\uFEFF'+lines.join('\r\n');
 }
 
-function NamePicker({onLogin}){
-  const[profiles,setProfiles]=useState([]);const[loading,setLoading]=useState(true);
-  useEffect(()=>{load()},[]);
-  async function load(){const{data}=await sb.from('profiles').select('*').order('name');setProfiles(data||[]);setLoading(false);}
+function RoleSelect({onSelectRole,loadingRole,err}){
   return(<div className="login-wrap"><div className="login-card"><div className="login-logo"><div className="login-logo-icon">🧾</div><div className="login-title">うま味経費精算</div><div className="login-sub">Expense Manager</div></div>
-    <div className="form-label" style={{marginBottom:10}}>あなたの名前を選んでください</div>
-    {loading?<div className="empty">読み込み中...</div>:profiles.length===0?<div className="empty">ユーザーが見つかりません</div>:profiles.map(p=>(
-      <button key={p.id} className="company-btn" onClick={()=>onLogin(p)}>
-        <div className="company-icon" style={{background:p.role==='office'?'#dcfce7':'#dbeafe'}}>{p.name?.[0]}</div>
-        <span>{p.name}<span style={{fontSize:11,color:'#94a3b8',marginLeft:8}}>{ROLE_LABELS[p.role]||p.role}</span></span>
-      </button>
-    ))}
+    {err&&<div className="error-msg">{err}</div>}
+    <button className="company-btn" onClick={()=>onSelectRole('office')} disabled={!!loadingRole} style={{padding:'18px 16px'}}>
+      <div className="company-icon" style={{background:'#dcfce7',width:44,height:44,fontSize:22}}>🏢</div>
+      <span style={{fontSize:16,fontWeight:700}}>{loadingRole==='office'?'読み込み中...':'事務所用'}</span>
+    </button>
+    <button className="company-btn" onClick={()=>onSelectRole('staff')} disabled={!!loadingRole} style={{padding:'18px 16px'}}>
+      <div className="company-icon" style={{background:'#dbeafe',width:44,height:44,fontSize:22}}>👤</div>
+      <span style={{fontSize:16,fontWeight:700}}>{loadingRole==='staff'?'読み込み中...':'本人用（現場）'}</span>
+    </button>
   </div></div>);
 }
 
@@ -602,23 +601,39 @@ function ReportPage({profile}){
 }
 
 function App(){
-  const[profile,setProfile]=useState(null);const[company,setCompany]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[showCompanySelect,setShowCompanySelect]=useState(false);const[page,setPage]=useState('dashboard');const[selectedId,setSelectedId]=useState(null);const[editId,setEditId]=useState(null);const[drawerOpen,setDrawerOpen]=useState(false);
+  const[profile,setProfile]=useState(null);const[company,setCompany]=useState(null);const[authLoading,setAuthLoading]=useState(true);const[showCompanySelect,setShowCompanySelect]=useState(false);const[loadingRole,setLoadingRole]=useState(null);const[roleErr,setRoleErr]=useState('');const[page,setPage]=useState('dashboard');const[selectedId,setSelectedId]=useState(null);const[editId,setEditId]=useState(null);const[drawerOpen,setDrawerOpen]=useState(false);
   useEffect(()=>{
-    const savedId=localStorage.getItem('umami_profile_id');
-    if(savedId){
-      sb.from('profiles').select('*').eq('id',savedId).single().then(({data})=>{
-        if(data){setProfile(data);const savedCompany=localStorage.getItem('umami_company');if(savedCompany)setCompany(savedCompany);}
-        else{localStorage.removeItem('umami_profile_id');localStorage.removeItem('umami_company');}
-        setAuthLoading(false);
-      });
-    }else{setAuthLoading(false);}
+    async function init(){
+      try{
+        const savedId=localStorage.getItem('umami_profile_id');
+        if(savedId){
+          const{data}=await sb.from('profiles').select('*').eq('id',savedId).single();
+          if(data){setProfile(data);const savedCompany=localStorage.getItem('umami_company');if(savedCompany)setCompany(savedCompany);}
+          else{localStorage.removeItem('umami_profile_id');localStorage.removeItem('umami_company');}
+        }
+      }catch(e){/* 保存された情報が使えない場合は選択画面へ */}
+      setAuthLoading(false);
+    }
+    init();
   },[]);
-  function handleLogin(prof){setProfile(prof);localStorage.setItem('umami_profile_id',prof.id);if(prof.role==='staff')setShowCompanySelect(true);}
+  async function handleSelectRole(role){
+    setLoadingRole(role);setRoleErr('');
+    try{
+      const{data,error}=await sb.from('profiles').select('*').eq('role',role).order('name').limit(1);
+      if(error)throw error;
+      if(!data||data.length===0){setRoleErr('該当するユーザーが見つかりません');setLoadingRole(null);return;}
+      const prof=data[0];
+      setProfile(prof);localStorage.setItem('umami_profile_id',prof.id);
+      setCompany(null);localStorage.removeItem('umami_company');
+      if(prof.role==='staff')setShowCompanySelect(true);
+    }catch(e){setRoleErr(e.message||'読み込みに失敗しました');}
+    setLoadingRole(null);
+  }
   function handleCompanySelect(c){setCompany(c);localStorage.setItem('umami_company',c);setShowCompanySelect(false);}
   function logout(){localStorage.removeItem('umami_profile_id');localStorage.removeItem('umami_company');setProfile(null);setCompany(null);setPage('dashboard');setSelectedId(null);setEditId(null);setShowCompanySelect(false);}
   function goPage(p){setPage(p);setSelectedId(null);setEditId(null);setDrawerOpen(false);}
   if(authLoading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',color:'#94a3b8'}}>読み込み中...</div>;
-  if(!profile)return<NamePicker onLogin={handleLogin}/>;
+  if(!profile)return<RoleSelect onSelectRole={handleSelectRole} loadingRole={loadingRole} err={roleErr}/>;
   if(showCompanySelect)return<CompanySelect profile={profile} onSelect={handleCompanySelect}/>;
   const isOffice=profile.role==='office';
   const navItems=[{key:'dashboard',icon:'🏠',label:'ホーム'},{key:'expenses',icon:'📋',label:'経費一覧'},{key:'archive',icon:'🗂',label:'承認中'},{key:'archived',icon:'✅',label:'承認済み'},{key:'reports',icon:'📊',label:'レポート'}];
