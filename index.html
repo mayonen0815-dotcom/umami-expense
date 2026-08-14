@@ -184,7 +184,26 @@ function Badge({status}){const s=STATUS[status]||{label:status,badge:'badge-draf
 
 function generatePDF(expense){
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
-  const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><style>body{font-family:'MS Gothic','Hiragino Sans',sans-serif;font-size:11px;margin:20px}h2{text-align:center;font-size:15px;margin-bottom:14px}.header-row{display:flex;justify-content:space-between;margin-bottom:10px}.total-box{border:2px solid #000;padding:4px 14px;font-size:13px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #000;padding:4px 6px}th{background:#d9d9d9;text-align:center}.receipt-section{margin-top:20px;border-top:2px solid #000;padding-top:14px}.receipt-title{font-size:13px;font-weight:bold;margin-bottom:12px}.receipt-grid{display:flex;flex-wrap:wrap;gap:10px}.receipt-item{text-align:center}.receipt-item img{width:180px;height:140px;object-fit:cover;border:1px solid #000;display:block}.receipt-item p{font-size:9px;margin-top:3px;width:180px}@media print{body{margin:0}}</style></head><body><h2>${expense.company?expense.company.replace('株式会社',''):'UMAMI'}経費精算</h2><div class="header-row"><div>申請日：${today}${expense.company?` ／ ${expense.company}`:''}</div><div class="total-box">¥${expense.amount.toLocaleString()}</div></div><div style="margin-bottom:10px">申請者：${expense.profiles?.name||''}</div><table><thead><tr><th style="width:90px">日付</th><th>適用</th><th style="width:80px">金額</th><th>備考</th></tr></thead><tbody><tr><td>${expense.expense_date}</td><td>${getCat(expense.category)} ${expense.title}</td><td style="text-align:right">¥${expense.amount.toLocaleString()}</td><td>${expense.description||''}</td></tr></tbody></table>${expense.receipt_url?`<div class="receipt-section"><div class="receipt-title">領収書</div><div class="receipt-grid"><div class="receipt-item"><img src="${expense.receipt_url}" alt="領収書"/><p>${expense.expense_date} ${expense.title}</p></div></div></div>`:''}<script>window.onload=function(){window.print()}<\/script></body></html>`;
+  const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><style>body{font-family:'MS Gothic','Hiragino Sans',sans-serif;font-size:11px;margin:20px}h2{text-align:center;font-size:15px;margin-bottom:14px}.header-row{display:flex;justify-content:space-between;margin-bottom:10px}.total-box{border:2px solid #000;padding:4px 14px;font-size:13px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #000;padding:4px 6px}th{background:#d9d9d9;text-align:center}.receipt-section{margin-top:20px;border-top:2px solid #000;padding-top:14px}.receipt-title{font-size:13px;font-weight:bold;margin-bottom:12px}.receipt-grid{display:flex;flex-wrap:wrap;gap:10px}.receipt-item{text-align:center}.receipt-item img{width:180px;height:140px;object-fit:cover;border:1px solid #000;display:block}.receipt-item p{font-size:9px;margin-top:3px;width:180px}@media print{body{margin:0}}</style></head><body><h2>${expense.company?expense.company.replace('株式会社',''):'UMAMI'}経費精算</h2><div class="header-row"><div>申請日：${today}${expense.company?` ／ ${expense.company}`:''}</div><div class="total-box">¥${expense.amount.toLocaleString()}</div></div><div style="margin-bottom:10px">申請者：${expense.profiles?.name||''}</div><table><thead><tr><th style="width:90px">日付</th><th>適用</th><th style="width:80px">金額</th><th>備考</th></tr></thead><tbody><tr><td>${expense.expense_date}</td><td>${getCat(expense.category)} ${expense.title}</td><td style="text-align:right">¥${expense.amount.toLocaleString()}</td><td>${expense.description||''}</td></tr></tbody></table>${expense.receipt_url?`<div class="receipt-section"><div class="receipt-title">領収書</div><div class="receipt-grid"><div class="receipt-item"><img src="${expense.receipt_url}" alt="領収書"/><p>${expense.expense_date} ${expense.title}</p></div></div></div>`:''}<script>
+window.onload=function(){
+  var imgs=document.querySelectorAll('img');
+  var total=imgs.length;
+  if(total===0){window.print();return;}
+  var loaded=0;
+  function checkDone(){
+    loaded++;
+    if(loaded>=total){window.print();}
+  }
+  imgs.forEach(function(img){
+    if(img.complete){
+      checkDone();
+    }else{
+      img.addEventListener('load',checkDone);
+      img.addEventListener('error',checkDone);
+    }
+  });
+}
+<\/script></body></html>`;
   const blob=new Blob([html],{type:'text/html;charset=utf-8;'});
   window.open(URL.createObjectURL(blob),'_blank');
 }
@@ -235,8 +254,10 @@ function printGroupPDF(items){
     .receipt-title{font-size:13px;font-weight:bold;margin:16px 0 10px;border-top:2px solid #000;padding-top:12px}
     .receipt-page{page-break-before:always;text-align:center;padding-top:10px}
     .receipt-page img{max-width:100%;max-height:95vh;object-fit:contain}
-    @media print{body{margin:8px}.receipt-page{page-break-before:always}}
+    .loading-note{position:fixed;top:8px;left:8px;font-size:10px;color:#999;z-index:999}
+    @media print{body{margin:8px}.receipt-page{page-break-before:always}.loading-note{display:none}}
   </style></head><body>
+    <div class="loading-note" id="loadingNote">画像読み込み中...</div>
     <h2>${companyShort}経費精算</h2>
     <div class="top-row">
       <div class="top-left">
@@ -248,7 +269,36 @@ function printGroupPDF(items){
     ${sectionsHtml}
     ${thumbGrid}
     ${withReceipt.length?`<div class="receipt-title">領収書（${withReceipt.length}件）</div>${receiptPages}`:''}
-    <script>window.onload=function(){window.print()}<\/script>
+    <script>
+window.onload=function(){
+  var imgs=document.querySelectorAll('img');
+  var total=imgs.length;
+  var note=document.getElementById('loadingNote');
+  function finish(){
+    if(note)note.remove();
+    window.print();
+  }
+  if(total===0){finish();return;}
+  var loaded=0;
+  function checkDone(){
+    loaded++;
+    if(note)note.textContent='画像読み込み中... ('+loaded+'/'+total+')';
+    if(loaded>=total){finish();}
+  }
+  imgs.forEach(function(img){
+    if(img.complete && img.naturalWidth>0){
+      checkDone();
+    }else{
+      img.addEventListener('load',checkDone);
+      img.addEventListener('error',checkDone);
+    }
+  });
+  // 万一読み込みが止まった場合の保険（最大15秒で強制的に印刷へ進む）
+  setTimeout(function(){
+    if(loaded<total){finish();}
+  },15000);
+}
+<\/script>
   </body></html>`;
   const blob=new Blob([html],{type:'text/html;charset=utf-8;'});
   window.open(URL.createObjectURL(blob),'_blank');
@@ -409,7 +459,18 @@ function ExpenseForm({profile,company,expenseId,onSave,onCancel}){
   useEffect(()=>{if(isEdit)loadExpense()},[expenseId]);
   async function loadExpense(){const{data}=await sb.from('expenses').select('*').eq('id',expenseId).single();if(data){setForm({title:data.title,amount:data.amount,category:data.category,expense_date:data.expense_date,description:data.description||'',receipt_url:data.receipt_url||'',company:data.company||''});if(data.receipt_url)setPreview(data.receipt_url);}}
   function handleFile(e){const f=e.target.files[0];if(!f)return;setFile(f);setPreview(URL.createObjectURL(f));}
-  async function uploadFile(){if(!file)return form.receipt_url;const ext=file.name.split('.').pop();const path=`receipts/${profile.id}/${Date.now()}.${ext}`;await sb.storage.from('receipts').upload(path,file);const{data:{publicUrl}}=sb.storage.from('receipts').getPublicUrl(path);return publicUrl;}
+  async function uploadFile(){
+    if(!file)return form.receipt_url;
+    const ext=file.name.split('.').pop();
+    const path=`receipts/${profile.id}/${Date.now()}.${ext}`;
+    const{error}=await sb.storage.from('receipts').upload(path,file);
+    if(error){
+      alert('領収書のアップロードに失敗しました: '+error.message);
+      throw error;
+    }
+    const{data:{publicUrl}}=sb.storage.from('receipts').getPublicUrl(path);
+    return publicUrl;
+  }
   function validate(){const e={};if(!form.title.trim())e.title='タイトルを入力してください';if(!form.amount)e.amount='金額を入力してください';if(!form.description.trim())e.description='備考を入力してください';setErrors(e);return Object.keys(e).length===0;}
   async function handleSubmit(submitForApproval){
     if(!validate())return;
@@ -423,7 +484,7 @@ function ExpenseForm({profile,company,expenseId,onSave,onCancel}){
         await sb.from('expenses').insert({...base,user_id:profile.id,status:submitForApproval?'pending_office':'draft'});
       }
       onSave();
-    }catch(e){alert('保存失敗: '+e.message);}
+    }catch(e){if(e&&e.message)alert('保存失敗: '+e.message);}
     setLoading(false);
   }
   return(<div className="page"><div style={{marginBottom:16}}><button className="btn btn-secondary" onClick={onCancel}>← 戻る</button></div><h2 style={{fontSize:18,fontWeight:700,marginBottom:4}}>{isEdit?'経費を編集':'経費を申請'}</h2><div className="card" style={{padding:20,marginBottom:16}}><div className="form-group"><label className="form-label">法人<span className="required">*</span></label><select className="form-input" value={form.company} onChange={e=>setForm(f=>({...f,company:e.target.value}))}><option value="">（未選択）</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div><div className="form-group"><label className="form-label">タイトル<span className="required">*</span></label><input className={`form-input ${errors.title?'error':''}`} value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="例: ルノアール"/>{errors.title&&<p className="err-text">{errors.title}</p>}</div><div className="form-grid"><div className="form-group"><label className="form-label">金額（円）<span className="required">*</span></label><input className={`form-input ${errors.amount?'error':''}`} type="number" min="0" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} placeholder="0"/>{errors.amount&&<p className="err-text">{errors.amount}</p>}</div><div className="form-group"><label className="form-label">日付<span className="required">*</span></label><input className="form-input" type="date" value={form.expense_date} onChange={e=>setForm(f=>({...f,expense_date:e.target.value}))}/></div></div><div className="form-group"><label className="form-label">カテゴリ<span className="required">*</span></label><select className="form-input" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{CATEGORIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div><div className="form-group"><label className="form-label">備考<span className="required">*</span></label><textarea className={`form-input ${errors.description?'error':''}`} rows={2} style={{resize:'none'}} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="備考を入力してください（必須）"/>{errors.description&&<p className="err-text">{errors.description}</p>}</div></div><div className="card" style={{padding:20,marginBottom:20}}><label className="form-label">領収書</label>{preview?(<div><img src={preview} className="receipt-preview" alt="領収書"/><br/><button className="btn btn-secondary btn-sm" style={{marginTop:8}} onClick={()=>{setPreview('');setFile(null);setForm(f=>({...f,receipt_url:''}));}}>🗑 削除</button></div>):(<label className="upload-area"><div className="upload-icon">📎</div><div className="upload-text">タップして画像を選択<br/><span style={{fontSize:11,color:'#94a3b8'}}>PNG, JPG, PDF</span></div><input type="file" style={{display:'none'}} accept="image/*,.pdf" onChange={handleFile}/></label>)}</div>{isEdit?(<button className="btn btn-primary" style={{width:'100%',justifyContent:'center',padding:'12px'}} onClick={()=>handleSubmit(true)} disabled={loading}>{loading?'保存中...':'保存する'}</button>):(<div style={{display:'flex',gap:10}}><button className="btn btn-secondary" style={{flex:1,justifyContent:'center',padding:'12px'}} onClick={()=>handleSubmit(false)} disabled={loading}>下書き保存</button><button className="btn btn-primary" style={{flex:1,justifyContent:'center',padding:'12px'}} onClick={()=>handleSubmit(true)} disabled={loading}>{loading?'処理中...':'申請する'}</button></div>)}</div>);
@@ -435,7 +496,29 @@ function BulkExpenseForm({profile,company,onSave,onCancel}){
   function updateItem(idx,field,value){setItems(prev=>prev.map((item,i)=>i===idx?{...item,[field]:value,errors:{...item.errors,[field]:''}}:item));}
   function removeItem(idx){setItems(prev=>prev.filter((_,i)=>i!==idx));}
   function validate(){let valid=true;setItems(prev=>prev.map(item=>{const e={};if(!item.title.trim())e.title='必須';if(!item.amount)e.amount='必須';if(!item.description.trim())e.description='必須';if(Object.keys(e).length>0)valid=false;return{...item,errors:e};}));return valid;}
-  async function handleSubmit(submitForApproval){if(items.length===0){alert('領収書を追加してください');return;}if(!validate())return;setLoading(true);try{for(const item of items){let receipt_url='';if(item.file){const ext=item.file.name.split('.').pop();const path=`receipts/${profile.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;await sb.storage.from('receipts').upload(path,item.file);const{data:{publicUrl}}=sb.storage.from('receipts').getPublicUrl(path);receipt_url=publicUrl;}await sb.from('expenses').insert({title:item.title,amount:Number(item.amount),category:item.category,expense_date:item.expense_date,description:item.description,receipt_url,user_id:profile.id,company:company||null,status:submitForApproval?'pending_office':'draft'});}onSave();}catch(e){alert('保存失敗: '+e.message);}setLoading(false);}
+  async function handleSubmit(submitForApproval){
+    if(items.length===0){alert('領収書を追加してください');return;}
+    if(!validate())return;
+    setLoading(true);
+    try{
+      for(const item of items){
+        let receipt_url='';
+        if(item.file){
+          const ext=item.file.name.split('.').pop();
+          const path=`receipts/${profile.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+          const{error}=await sb.storage.from('receipts').upload(path,item.file);
+          if(error){
+            throw new Error(`「${item.title||'領収書'}」のアップロードに失敗しました: ${error.message}`);
+          }
+          const{data:{publicUrl}}=sb.storage.from('receipts').getPublicUrl(path);
+          receipt_url=publicUrl;
+        }
+        await sb.from('expenses').insert({title:item.title,amount:Number(item.amount),category:item.category,expense_date:item.expense_date,description:item.description,receipt_url,user_id:profile.id,company:company||null,status:submitForApproval?'pending_office':'draft'});
+      }
+      onSave();
+    }catch(e){alert('保存失敗: '+e.message);}
+    setLoading(false);
+  }
   return(<div className="page"><div style={{marginBottom:16}}><button className="btn btn-secondary" onClick={onCancel}>← 戻る</button></div><div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}><h2 style={{fontSize:18,fontWeight:700}}>一括申請</h2><span style={{fontSize:13,color:'#64748b'}}>{items.length}件</span></div>{company&&<p style={{fontSize:13,color:'#92400e',fontWeight:600,marginBottom:16}}>🏢 {company}</p>}<label className="upload-area" style={{display:'block',marginBottom:16,cursor:'pointer'}}><div className="upload-icon">📷</div><div className="upload-text">タップして領収書を追加<br/><span style={{fontSize:11,color:'#94a3b8'}}>複数選択可能</span></div><input type="file" style={{display:'none'}} accept="image/*,.pdf" multiple onChange={addFiles}/></label>{items.length===0&&(<div className="card" style={{padding:30,textAlign:'center',color:'#94a3b8',fontSize:14}}>上のボタンから領収書の写真を追加してください</div>)}{items.map((item,idx)=>(<div className="bulk-item" key={idx}><div className="bulk-item-header"><span className="bulk-item-num">領収書 {idx+1}</span><button className="btn btn-danger btn-sm" onClick={()=>removeItem(idx)}>削除</button></div>{item.preview&&<img src={item.preview} className="bulk-img" alt="領収書"/>}<div className="form-group"><label className="form-label">タイトル<span className="required">*</span></label><input className={`form-input ${item.errors.title?'error':''}`} value={item.title} onChange={e=>updateItem(idx,'title',e.target.value)} placeholder="例: ルノアール"/>{item.errors.title&&<p className="err-text">{item.errors.title}</p>}</div><div className="form-grid"><div className="form-group"><label className="form-label">金額（円）<span className="required">*</span></label><input className={`form-input ${item.errors.amount?'error':''}`} type="number" min="0" value={item.amount} onChange={e=>updateItem(idx,'amount',e.target.value)} placeholder="0"/>{item.errors.amount&&<p className="err-text">{item.errors.amount}</p>}</div><div className="form-group"><label className="form-label">日付<span className="required">*</span></label><input className="form-input" type="date" value={item.expense_date} onChange={e=>updateItem(idx,'expense_date',e.target.value)}/></div></div><div className="form-group"><label className="form-label">カテゴリ<span className="required">*</span></label><select className="form-input" value={item.category} onChange={e=>updateItem(idx,'category',e.target.value)}>{CATEGORIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div><div className="form-group"><label className="form-label">備考<span className="required">*</span></label><input className={`form-input ${item.errors.description?'error':''}`} value={item.description} onChange={e=>updateItem(idx,'description',e.target.value)} placeholder="備考（必須）"/>{item.errors.description&&<p className="err-text">{item.errors.description}</p>}</div></div>))}{items.length>0&&(<div style={{display:'flex',gap:10,marginTop:8}}><button className="btn btn-secondary" style={{flex:1,justifyContent:'center',padding:'12px'}} onClick={()=>handleSubmit(false)} disabled={loading}>下書き保存</button><button className="btn btn-primary" style={{flex:1,justifyContent:'center',padding:'12px'}} onClick={()=>handleSubmit(true)} disabled={loading}>{loading?'登録中...':`${items.length}件を申請する`}</button></div>)}</div>);
 }
 
