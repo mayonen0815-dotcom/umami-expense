@@ -182,6 +182,37 @@ function fmtDate(d){if(!d)return'---';return new Date(d).toLocaleDateString('ja-
 function getCat(v){return CATEGORIES.find(c=>c.value===v)?.label||v}
 function Badge({status}){const s=STATUS[status]||{label:status,badge:'badge-draft'};return<span className={`badge ${s.badge}`}>{s.label}</span>}
 
+function compressImage(file,maxDimension=1600,quality=0.8){
+  return new Promise((resolve,reject)=>{
+    // PDF等、画像以外はそのまま返す（圧縮対象外）
+    if(!file.type.startsWith('image/')){resolve(file);return;}
+    const img=new Image();
+    const reader=new FileReader();
+    reader.onload=function(e){
+      img.onload=function(){
+        let{width,height}=img;
+        if(width>maxDimension||height>maxDimension){
+          if(width>height){height=Math.round(height*(maxDimension/width));width=maxDimension;}
+          else{width=Math.round(width*(maxDimension/height));height=maxDimension;}
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=width;canvas.height=height;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,width,height);
+        canvas.toBlob(function(blob){
+          if(!blob){reject(new Error('画像の圧縮に失敗しました'));return;}
+          const newFile=new File([blob],file.name.replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'});
+          resolve(newFile);
+        },'image/jpeg',quality);
+      };
+      img.onerror=function(){reject(new Error('画像の読み込みに失敗しました'));};
+      img.src=e.target.result;
+    };
+    reader.onerror=function(){reject(new Error('ファイルの読み込みに失敗しました'));};
+    reader.readAsDataURL(file);
+  });
+}
+
 function generatePDF(expense){
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><style>body{font-family:'MS Gothic','Hiragino Sans',sans-serif;font-size:11px;margin:20px}h2{text-align:center;font-size:15px;margin-bottom:14px}.header-row{display:flex;justify-content:space-between;margin-bottom:10px}.total-box{border:2px solid #000;padding:4px 14px;font-size:13px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #000;padding:4px 6px}th{background:#d9d9d9;text-align:center}.receipt-section{margin-top:20px;border-top:2px solid #000;padding-top:14px}.receipt-title{font-size:13px;font-weight:bold;margin-bottom:12px}.receipt-grid{display:flex;flex-wrap:wrap;gap:10px}.receipt-item{text-align:center}.receipt-item img{width:180px;height:140px;object-fit:cover;border:1px solid #000;display:block}.receipt-item p{font-size:9px;margin-top:3px;width:180px}@media print{body{margin:0}}</style></head><body><h2>${expense.company?expense.company.replace('株式会社',''):'UMAMI'}経費精算</h2><div class="header-row"><div>申請日：${today}${expense.company?` ／ ${expense.company}`:''}</div><div class="total-box">¥${expense.amount.toLocaleString()}</div></div><div style="margin-bottom:10px">申請者：${expense.profiles?.name||''}</div><table><thead><tr><th style="width:90px">日付</th><th>適用</th><th style="width:80px">金額</th><th>備考</th></tr></thead><tbody><tr><td>${expense.expense_date}</td><td>${getCat(expense.category)} ${expense.title}</td><td style="text-align:right">¥${expense.amount.toLocaleString()}</td><td>${expense.description||''}</td></tr></tbody></table>${expense.receipt_url?`<div class="receipt-section"><div class="receipt-title">領収書</div><div class="receipt-grid"><div class="receipt-item"><img src="${expense.receipt_url}" alt="領収書"/><p>${expense.expense_date} ${expense.title}</p></div></div></div>`:''}<script>
@@ -461,9 +492,16 @@ function ExpenseForm({profile,company,expenseId,onSave,onCancel}){
   function handleFile(e){const f=e.target.files[0];if(!f)return;setFile(f);setPreview(URL.createObjectURL(f));}
   async function uploadFile(){
     if(!file)return form.receipt_url;
-    const ext=file.name.split('.').pop();
+    let uploadTarget=file;
+    try{
+      uploadTarget=await compressImage(file);
+    }catch(compressErr){
+      // 圧縮に失敗した場合は元のファイルでアップロードを試みる
+      uploadTarget=file;
+    }
+    const ext=uploadTarget.name.split('.').pop();
     const path=`receipts/${profile.id}/${Date.now()}.${ext}`;
-    const{error}=await sb.storage.from('receipts').upload(path,file);
+    const{error}=await sb.storage.from('receipts').upload(path,uploadTarget);
     if(error){
       alert('領収書のアップロードに失敗しました: '+error.message);
       throw error;
@@ -504,9 +542,15 @@ function BulkExpenseForm({profile,company,onSave,onCancel}){
       for(const item of items){
         let receipt_url='';
         if(item.file){
-          const ext=item.file.name.split('.').pop();
+          let uploadTarget=item.file;
+          try{
+            uploadTarget=await compressImage(item.file);
+          }catch(compressErr){
+            uploadTarget=item.file;
+          }
+          const ext=uploadTarget.name.split('.').pop();
           const path=`receipts/${profile.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-          const{error}=await sb.storage.from('receipts').upload(path,item.file);
+          const{error}=await sb.storage.from('receipts').upload(path,uploadTarget);
           if(error){
             throw new Error(`「${item.title||'領収書'}」のアップロードに失敗しました: ${error.message}`);
           }
