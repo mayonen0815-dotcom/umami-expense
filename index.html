@@ -257,7 +257,7 @@ function printGroupPDF(items){
     .loading-note{position:fixed;top:8px;left:8px;font-size:10px;color:#999;z-index:999}
     @media print{body{margin:8px}.receipt-page{page-break-before:always}.loading-note{display:none}}
   </style></head><body>
-    <div class="loading-note" id="loadingNote">画像読み込み中...</div>
+    <div class="loading-note" id="loadingNote">画像読み込み中... <button id="skipWaitBtn" type="button" style="margin-left:8px;font-size:10px;cursor:pointer">今すぐ印刷</button></div>
     <h2>${companyShort}経費精算</h2>
     <div class="top-row">
       <div class="top-left">
@@ -274,15 +274,22 @@ window.onload=function(){
   var imgs=document.querySelectorAll('img');
   var total=imgs.length;
   var note=document.getElementById('loadingNote');
+  var skipBtn=document.getElementById('skipWaitBtn');
+  var finished=false;
   function finish(){
+    if(finished)return;
+    finished=true;
     if(note)note.remove();
     window.print();
   }
+  if(skipBtn)skipBtn.addEventListener('click',finish);
   if(total===0){finish();return;}
   var loaded=0;
+  var lastProgress=Date.now();
   function checkDone(){
     loaded++;
-    if(note)note.textContent='画像読み込み中... ('+loaded+'/'+total+')';
+    lastProgress=Date.now();
+    if(note)note.childNodes[0].textContent='画像読み込み中... ('+loaded+'/'+total+') ※枚数が多いと時間がかかります　';
     if(loaded>=total){finish();}
   }
   imgs.forEach(function(img){
@@ -293,10 +300,12 @@ window.onload=function(){
       img.addEventListener('error',checkDone);
     }
   });
-  // 万一読み込みが止まった場合の保険（最大15秒で強制的に印刷へ進む）
-  setTimeout(function(){
-    if(loaded<total){finish();}
-  },15000);
+  // 読み込みが完全に止まった場合の保険：直近20秒間、新たに読み込みが完了した画像が
+  // 1件もなければ強制的に印刷へ進む（通信が遅いだけで読み込みが進行中の間は待ち続ける）
+  var watchdog=setInterval(function(){
+    if(loaded>=total){clearInterval(watchdog);return;}
+    if(Date.now()-lastProgress>20000){clearInterval(watchdog);finish();}
+  },1000);
 }
 <\/script>
   </body></html>`;
