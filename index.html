@@ -591,7 +591,7 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
   const pendingItems=showGrouping?filtered.filter(e=>e.status==='pending_office'):[];
   const otherItems=filtered.filter(e=>!(showGrouping&&e.status==='pending_office'));
   const groups={};
-  pendingItems.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
+  pendingItems.forEach(e=>{const key=e.company||'—';(groups[key]=groups[key]||{company:e.company,items:[]}).items.push(e);});
   function toggleSelect(id){setSelected(s=>({...s,[id]:!s[id]}));}
   const selectedIds=Object.keys(selected).filter(id=>selected[id]);
   function switchMode(next){setMode(m=>m===next?'none':next);setSelected({});}
@@ -629,7 +629,7 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     try{
       const ids=items.map(e=>e.id);
       await sb.from('expenses').update({status:'approved'}).in('id',ids);
-      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:`${items.length}件まとめ（同日申請）`,from_status:'pending_office',to_status:'approved'})));
+      await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:`${items.length}件まとめ承認`,from_status:'pending_office',to_status:'approved'})));
       await loadData();
     }catch(e){alert('承認に失敗しました: '+e.message);}
     setApprovingKey(null);
@@ -646,13 +646,13 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     </div>
     {loading?<div className="table-wrap"><div className="empty">読み込み中...</div></div>:(<>
       {showGrouping&&Object.keys(groups).length>0&&(<>
-        <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同日申請はまとめて表示されます）</div>
+        <div style={{fontSize:13,fontWeight:600,color:'#854d0e',marginBottom:8}}>⏳ 承認待ち（同じ法人の申請はまとめて表示されます）</div>
         {Object.entries(groups).map(([key,group])=>{
           const total=group.items.reduce((s,e)=>s+e.amount,0);
           const isApproving=approvingKey===key;
           return(<div className="batch-card" key={key}>
             <div className="batch-card-header">
-              <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ {fmtDate(group.day)}申請（{group.items.length}件・{fmt(total)}）</span>
+              <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ 承認待ち（{group.items.length}件・{fmt(total)}）</span>
               {isOffice&&(<div style={{display:'flex',gap:8}}>
                 <button className="btn btn-secondary btn-sm" onClick={()=>handleExportCSV(group.items)}>📊 CSVで出力</button>
                 <button className="btn btn-success btn-sm" onClick={()=>handleApproveGroup(group.items,key)} disabled={isApproving}>{isApproving?'処理中...':'✅ 申請する'}</button>
@@ -826,7 +826,7 @@ function ArchivePage({profile}){
   const total=expenses.reduce((s,e)=>s+e.amount,0);
   const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
   const groups={};
-  expenses.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
+  expenses.forEach(e=>{const key=e.company||'—';(groups[key]=groups[key]||{company:e.company,items:[]}).items.push(e);});
   return(<div className="page"><div className="page-header"><div><div className="page-title">承認中</div><div className="page-sub">最終承認待ちの経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.length>0&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認中 {expenses.length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
     {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">承認中の経費はありません</div></div>:(
       Object.entries(groups).map(([key,group])=>{
@@ -884,7 +884,7 @@ function ArchivedPage({profile}){
   const total=expenses.reduce((s,e)=>s+e.amount,0);
   const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
   const groups={};
-  expenses.forEach(e=>{const day=(e.created_at||e.expense_date||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
+  expenses.forEach(e=>{const key=e.company||'—';(groups[key]=groups[key]||{company:e.company,items:[]}).items.push(e);});
   return(<div className="page"><div className="page-header"><div><div className="page-title">承認済み</div><div className="page-sub">最終承認が完了した経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.length>0&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認済み {expenses.length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
     {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">承認済みの経費はありません</div></div>:(
       Object.entries(groups).map(([key,group])=>{
