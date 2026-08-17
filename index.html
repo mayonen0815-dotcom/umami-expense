@@ -88,6 +88,7 @@ nav{flex:1;padding:10px}
 .company-btn{display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border-radius:10px;border:2px solid #e2e8f0;background:#fff;cursor:pointer;font-size:14px;font-weight:600;color:#0f172a;margin-bottom:10px;transition:all .15s}
 .company-btn:hover{border-color:#2563eb;background:#eff6ff;color:#2563eb}
 .company-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.company-folder-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
 .approval-flow{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:12px 16px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;flex-wrap:wrap}
 .flow-step{text-align:center;font-size:12px}
 .flow-step-name{font-weight:600;color:#0f172a}
@@ -182,7 +183,8 @@ function fmtDate(d){if(!d)return'---';return new Date(d).toLocaleDateString('ja-
 function getCat(v){return CATEGORIES.find(c=>c.value===v)?.label||v}
 function Badge({status}){const s=STATUS[status]||{label:status,badge:'badge-draft'};return<span className={`badge ${s.badge}`}>{s.label}</span>}
 
-function generatePDF(expense){
+async function generatePDF(expense){
+  sb.from('expenses').update({pdf_generated_at:new Date().toISOString()}).eq('id',expense.id).then(()=>{});
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><style>body{font-family:'MS Gothic','Hiragino Sans',sans-serif;font-size:11px;margin:20px}h2{text-align:center;font-size:15px;margin-bottom:14px}.header-row{display:flex;justify-content:space-between;margin-bottom:10px}.total-box{border:2px solid #000;padding:4px 14px;font-size:13px;font-weight:bold}table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #000;padding:4px 6px}th{background:#d9d9d9;text-align:center}.receipt-section{margin-top:20px;border-top:2px solid #000;padding-top:14px}.receipt-title{font-size:13px;font-weight:bold;margin-bottom:12px}.receipt-grid{display:flex;flex-wrap:wrap;gap:10px}.receipt-item{text-align:center}.receipt-item img{width:180px;height:140px;object-fit:cover;border:1px solid #000;display:block}.receipt-item p{font-size:9px;margin-top:3px;width:180px}@media print{body{margin:0}}</style></head><body><h2>${expense.company?expense.company.replace('株式会社',''):'UMAMI'}経費精算</h2><div class="header-row"><div>申請日：${today}${expense.company?` ／ ${expense.company}`:''}</div><div class="total-box">¥${expense.amount.toLocaleString()}</div></div><div style="margin-bottom:10px">申請者：${expense.profiles?.name||''}</div><table><thead><tr><th style="width:90px">日付</th><th>適用</th><th style="width:80px">金額</th><th>備考</th></tr></thead><tbody><tr><td>${expense.expense_date}</td><td>${getCat(expense.category)} ${expense.title}</td><td style="text-align:right">¥${expense.amount.toLocaleString()}</td><td>${expense.description||''}</td></tr></tbody></table>${expense.receipt_url?`<div class="receipt-section"><div class="receipt-title">領収書</div><div class="receipt-grid"><div class="receipt-item"><img src="${expense.receipt_url}" alt="領収書"/><p>${expense.expense_date} ${expense.title}</p></div></div></div>`:''}<script>
 window.onload=function(){
@@ -209,6 +211,7 @@ window.onload=function(){
 }
 
 function printGroupPDF(items){
+  sb.from('expenses').update({pdf_generated_at:new Date().toISOString()}).in('id',items.map(e=>e.id)).then(()=>{});
   const total=items.reduce((s,e)=>s+e.amount,0);
   const company=items[0]?.company||'';
   const companyShort=company?company.replace('株式会社',''):'UMAMI';
@@ -624,6 +627,11 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
     downloadBlob(blob,`umami_${(items[0].company||'').replace('株式会社','')}_${items[0].expense_date||''}.csv`);
   }
+  async function handlePrintPendingGroup(items){
+    await sb.from('expenses').update({pdf_generated_at:new Date().toISOString()}).in('id',items.map(e=>e.id));
+    printGroupPDF(items);
+    await loadData();
+  }
   async function handleApproveGroup(items,key){
     setApprovingKey(key);
     try{
@@ -650,10 +658,15 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
         {Object.entries(groups).map(([key,group])=>{
           const total=group.items.reduce((s,e)=>s+e.amount,0);
           const isApproving=approvingKey===key;
+          const pdfCount=group.items.filter(e=>e.pdf_generated_at).length;
           return(<div className="batch-card" key={key}>
             <div className="batch-card-header">
-              <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ 承認待ち（{group.items.length}件・{fmt(total)}）</span>
+              <div>
+                <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'} ／ 承認待ち（{group.items.length}件・{fmt(total)}）</span>
+                {pdfCount>0&&(<div style={{fontSize:11,marginTop:4,color:pdfCount===group.items.length?'#16a34a':'#d97706'}}>{pdfCount===group.items.length?'✅ PDF出力済み':`📄 一部PDF出力済み（${pdfCount}/${group.items.length}件）`}</div>)}
+              </div>
               {isOffice&&(<div style={{display:'flex',gap:8}}>
+                <button className="btn btn-secondary btn-sm" onClick={()=>handlePrintPendingGroup(group.items)}>📄 PDF（まとめ）</button>
                 <button className="btn btn-secondary btn-sm" onClick={()=>handleExportCSV(group.items)}>📊 CSVで出力</button>
                 <button className="btn btn-success btn-sm" onClick={()=>handleApproveGroup(group.items,key)} disabled={isApproving}>{isApproving?'処理中...':'✅ 申請する'}</button>
               </div>)}
@@ -663,16 +676,27 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
         })}
       </>)}
       <div className="table-wrap">
+        {otherItems.length>0&&(<div className="expense-row" style={{fontSize:11,fontWeight:700,color:'#94a3b8',background:'#f8fafc'}}>
+          {mode!=='none'&&<span style={{width:16,display:'inline-block'}}/>}
+          <span style={{width:64,flexShrink:0}}>法人</span>
+          <span style={{width:64,flexShrink:0}}>日付</span>
+          <span style={{width:64,flexShrink:0}}>対象者</span>
+          <span style={{flex:1}}>適用</span>
+          <span style={{width:80,flexShrink:0,textAlign:'right'}}>金額</span>
+          <span style={{width:60,flexShrink:0,textAlign:'center'}}>状態</span>
+          <span style={{width:82,flexShrink:0,textAlign:'center'}}>PDF</span>
+        </div>)}
         {otherItems.length===0?(showGrouping&&Object.keys(groups).length>0?null:<div className="empty">申請がありません</div>):otherItems.map(e=>{
           const canPick=mode!=='none'&&eligibleStatuses.includes(e.status);
           return(<div className="expense-row" key={e.id} style={{cursor:canPick?'default':'pointer'}} onClick={canPick?undefined:()=>onSelect(e.id)}>
             {mode!=='none'&&(canPick?<input type="checkbox" className="checkbox" checked={!!selected[e.id]} onChange={()=>toggleSelect(e.id)}/>:<span style={{width:16,display:'inline-block'}}/>)}
-            <span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span>
-            <span className="expense-name">{e.profiles?.name||''}</span>
+            <span className="expense-company" style={{width:64}}>{e.company?.replace('株式会社','')||'—'}</span>
+            <span style={{width:64,flexShrink:0,fontSize:12,color:'#64748b'}}>{e.expense_date?e.expense_date.slice(5).replace('-','/'):'—'}</span>
+            <span className="expense-name" style={{width:64}}>{e.profiles?.name||''}</span>
             <span className="expense-title" style={{cursor:'pointer'}} onClick={()=>onSelect(e.id)}>{e.title}</span>
-            <span className="expense-amount">{fmt(e.amount)}</span>
-            <Badge status={e.status}/>
-            <button className="btn btn-secondary btn-sm" style={{flexShrink:0}} onClick={ev=>{ev.stopPropagation();generatePDF(e);}}>📄 PDF</button>
+            <span className="expense-amount" style={{width:80,textAlign:'right'}}>{fmt(e.amount)}</span>
+            <span style={{width:60,flexShrink:0,textAlign:'center'}}><Badge status={e.status}/></span>
+            <button className="btn btn-secondary btn-sm" style={{flexShrink:0,width:82,justifyContent:'center'}} onClick={ev=>{ev.stopPropagation();generatePDF(e);}}>📄 PDF</button>
           </div>);
         })}
       </div>
@@ -857,14 +881,14 @@ function ArchivePage({profile}){
 
 function ArchivedPage({profile}){
   const isOffice=profile.role==='office';
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[pickerKey,setPickerKey]=useState(null);const[fixingKey,setFixingKey]=useState(null);
-  useEffect(()=>{loadData()},[monthFilter,companyFilter]);
+  const[selectedCompany,setSelectedCompany]=useState(null);
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[pickerKey,setPickerKey]=useState(null);const[fixingKey,setFixingKey]=useState(null);
+  useEffect(()=>{if(selectedCompany)loadData()},[monthFilter,selectedCompany]);
   async function loadData(){
     setLoading(true);
-    let q=sb.from('expenses').select('*,profiles(name)').eq('status','archived');
+    let q=sb.from('expenses').select('*,profiles(name)').eq('status','archived').eq('company',selectedCompany);
     if(profile.role==='staff')q=q.eq('user_id',profile.id);
     if(monthFilter){const start=monthFilter+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);q=q.gte('expense_date',start).lte('expense_date',end);}
-    if(companyFilter)q=q.eq('company',companyFilter);
     const{data}=await q.order('expense_date',{ascending:false});
     setExpenses(data||[]);
     setLoading(false);
@@ -881,11 +905,16 @@ function ArchivedPage({profile}){
     }catch(e){alert('法人の更新に失敗しました: '+e.message);}
     setFixingKey(null);
   }
+  if(!selectedCompany){
+    return(<div className="page"><div className="page-header"><div><div className="page-title">承認済み</div><div className="page-sub">法人を選んでください</div></div></div><div className="company-folder-grid">{COMPANIES.map(c=>(<button key={c.value} className="company-btn" onClick={()=>setSelectedCompany(c.value)}><div className="company-icon" style={{background:c.color}}>{c.icon}</div><span>{c.label}</span></button>))}</div></div>);
+  }
   const total=expenses.reduce((s,e)=>s+e.amount,0);
   const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
   const groups={};
   expenses.forEach(e=>{const key=e.company||'—';(groups[key]=groups[key]||{company:e.company,items:[]}).items.push(e);});
-  return(<div className="page"><div className="page-header"><div><div className="page-title">承認済み</div><div className="page-sub">最終承認が完了した経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.length>0&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認済み {expenses.length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
+  return(<div className="page"><div className="page-header"><div><button className="btn btn-secondary btn-sm" style={{marginBottom:8}} onClick={()=>setSelectedCompany(null)}>← 法人選択に戻る</button><div className="page-title">承認済み｜{selectedCompany.replace('株式会社','')}</div></div><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></div>
+    <div style={{marginBottom:20}}><ReportPage profile={profile} fixedCompany={selectedCompany}/></div>
+    {!loading&&expenses.length>0&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認済み {expenses.length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
     {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">承認済みの経費はありません</div></div>:(
       Object.entries(groups).map(([key,group])=>{
         const t=group.items.reduce((s,e)=>s+e.amount,0);
@@ -911,8 +940,8 @@ function ArchivedPage({profile}){
   </div>);
 }
 
-function ReportPage({profile}){
-  const[month,setMonth]=useState(new Date().toISOString().slice(0,7));const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[companyFilter,setCompanyFilter]=useState('');
+function ReportPage({profile,fixedCompany}){
+  const[month,setMonth]=useState(new Date().toISOString().slice(0,7));const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[companyFilter,setCompanyFilter]=useState(fixedCompany||'');
   useEffect(()=>{loadData()},[month,companyFilter]);
   async function loadData(){setLoading(true);const start=month+'-01';const end=new Date(new Date(start).getFullYear(),new Date(start).getMonth()+1,0).toISOString().slice(0,10);let q=sb.from('expenses').select('*').gte('expense_date',start).lte('expense_date',end).in('status',['approved','archived']);if(profile.role==='staff')q=q.eq('user_id',profile.id);if(companyFilter)q=q.eq('company',companyFilter);const{data}=await q;setExpenses(data||[]);setLoading(false);}
   const total=expenses.reduce((s,e)=>s+e.amount,0);
@@ -920,7 +949,7 @@ function ReportPage({profile}){
   const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
   const r=60,cx=80,cy=80,circ=2*Math.PI*r;let offset=0;
   const arcs=byCat.map(cat=>{const dash=(cat.pct/100)*circ;const el={cat,dash,offset};offset+=dash;return el;});
-  return(<div className="page"><div className="page-header"><div className="page-title">月次レポート</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><select className="form-input" style={{width:140,fontSize:13}} value={month} onChange={e=>setMonth(e.target.value)}>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:140,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div></div>{loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="empty">この月の承認済み経費はありません</div>:(<><div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:12,color:'#64748b',marginBottom:4}}>承認済み合計</div><div style={{fontSize:28,fontWeight:700}}>{fmt(total)}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>{expenses.length}件</div></div>{byCat.length>0&&(<div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:13,fontWeight:600,marginBottom:14}}>カテゴリ別</div><div className="donut-wrap"><svg width="160" height="160">{arcs.map(({cat,dash,offset})=>(<circle key={cat.value} cx={cx} cy={cy} r={r} fill="none" stroke={cat.color} strokeWidth="20" strokeDasharray={`${dash} ${circ-dash}`} strokeDashoffset={-offset}/>))}<text x={cx} y={cy-6} textAnchor="middle" fill="#64748b" fontSize="11">合計</text><text x={cx} y={cy+10} textAnchor="middle" fill="#0f172a" fontSize="13" fontWeight="bold">{new Intl.NumberFormat('ja-JP',{notation:'compact'}).format(total)}円</text></svg><div className="legend">{byCat.map(cat=>(<div className="legend-item" key={cat.value}><div className="legend-dot" style={{background:cat.color}}/><span className="legend-label">{cat.label}</span><span className="legend-pct">{cat.pct}%</span><span className="legend-amt">{fmt(cat.amount)}</span></div>))}</div></div></div>)}<div className="table-wrap">{expenses.sort((a,b)=>new Date(a.expense_date)-new Date(b.expense_date)).map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div></>)}</div>);
+  return(<div className={fixedCompany?'':'page'}><div className="page-header"><div className="page-title">{fixedCompany?'内訳レポート':'月次レポート'}</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}><select className="form-input" style={{width:140,fontSize:13}} value={month} onChange={e=>setMonth(e.target.value)}>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select>{!fixedCompany&&<select className="form-input" style={{width:140,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select>}</div></div>{loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="empty">この月の承認済み経費はありません</div>:(<><div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:12,color:'#64748b',marginBottom:4}}>承認済み合計</div><div style={{fontSize:28,fontWeight:700}}>{fmt(total)}</div><div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>{expenses.length}件</div></div>{byCat.length>0&&(<div className="card" style={{padding:16,marginBottom:12}}><div style={{fontSize:13,fontWeight:600,marginBottom:14}}>カテゴリ別</div><div className="donut-wrap"><svg width="160" height="160">{arcs.map(({cat,dash,offset})=>(<circle key={cat.value} cx={cx} cy={cy} r={r} fill="none" stroke={cat.color} strokeWidth="20" strokeDasharray={`${dash} ${circ-dash}`} strokeDashoffset={-offset}/>))}<text x={cx} y={cy-6} textAnchor="middle" fill="#64748b" fontSize="11">合計</text><text x={cx} y={cy+10} textAnchor="middle" fill="#0f172a" fontSize="13" fontWeight="bold">{new Intl.NumberFormat('ja-JP',{notation:'compact'}).format(total)}円</text></svg><div className="legend">{byCat.map(cat=>(<div className="legend-item" key={cat.value}><div className="legend-dot" style={{background:cat.color}}/><span className="legend-label">{cat.label}</span><span className="legend-pct">{cat.pct}%</span><span className="legend-amt">{fmt(cat.amount)}</span></div>))}</div></div></div>)}<div className="table-wrap">{expenses.sort((a,b)=>new Date(a.expense_date)-new Date(b.expense_date)).map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-company">{e.company?.replace('株式会社','')||'—'}</span><span className="expense-title">{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div></>)}</div>);
 }
 
 function App(){
