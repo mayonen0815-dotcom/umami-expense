@@ -616,12 +616,14 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     if(items.length===0)return;
     setBusy(true);
     try{
+      const updatedItems=items.map(e=>({...e,company:companyValue}));
+      printGroupPDF(updatedItems);
       const ids=items.map(e=>e.id);
       await sb.from('expenses').update({status:'approved',company:companyValue,bundled_at:new Date().toISOString()}).in('id',ids);
       await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:`${items.length}件まとめて${companyValue}の承認中へ`,from_status:e.status,to_status:'approved'})));
       setMode('none');setBundlePickerOpen(false);
       await loadData();
-      alert(`✅ ${items.length}件を${companyValue.replace('株式会社','')}の承認中へ移動しました`);
+      alert(`✅ ${items.length}件を${companyValue.replace('株式会社','')}の承認中へ移動しました（選んだ分だけのPDFも開きました）`);
     }catch(e){alert('移動に失敗しました: '+e.message);}
     setBusy(false);
   }
