@@ -180,6 +180,7 @@ const ROLE_BADGE={staff:'role-staff',office:'role-office'};
 const CAT_COLORS=['#ec4899','#3b82f6','#8b5cf6','#f59e0b'];
 function fmt(n){return new Intl.NumberFormat('ja-JP',{style:'currency',currency:'JPY'}).format(n)}
 function fmtDate(d){if(!d)return'---';return new Date(d).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'})}
+function fmtMonthDay(dayStr){if(!dayStr)return'';const p=dayStr.slice(0,10).split('-');if(p.length!==3)return'';return`${parseInt(p[1],10)}月${parseInt(p[2],10)}日`}
 function getCat(v){return CATEGORIES.find(c=>c.value===v)?.label||v}
 function Badge({status}){const s=STATUS[status]||{label:status,badge:'badge-draft'};return<span className={`badge ${s.badge}`}>{s.label}</span>}
 
@@ -625,7 +626,7 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
       const updatedItems=items.map(e=>({...e,company:companyValue}));
       printGroupPDF(updatedItems);
       const ids=items.map(e=>e.id);
-      await sb.from('expenses').update({status:'approved',company:companyValue,bundled_at:new Date().toISOString()}).in('id',ids);
+      await sb.from('expenses').update({status:'approved',company:companyValue,bundled_at:new Date().toISOString(),approved_at:new Date().toISOString()}).in('id',ids);
       await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:`${items.length}件まとめて${companyValue}の承認中へ`,from_status:e.status,to_status:'approved'})));
       setMode('none');setBundlePickerOpen(false);
       await loadData();
@@ -670,7 +671,7 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     setApprovingKey(key);
     try{
       const ids=items.map(e=>e.id);
-      await sb.from('expenses').update({status:'approved'}).in('id',ids);
+      await sb.from('expenses').update({status:'approved',approved_at:new Date().toISOString()}).in('id',ids);
       await sb.from('approval_logs').insert(items.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:`${items.length}件まとめ承認`,from_status:'pending_office',to_status:'approved'})));
       await loadData();
     }catch(e){alert('承認に失敗しました: '+e.message);}
@@ -825,7 +826,7 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
   const[expense,setExpense]=useState(null);const[logs,setLogs]=useState([]);const[comment,setComment]=useState('');const[loading,setLoading]=useState(false);
   useEffect(()=>{loadData()},[expenseId]);
   async function loadData(){const[{data:exp},{data:lg}]=await Promise.all([sb.from('expenses').select('*,profiles(name)').eq('id',expenseId).single(),sb.from('approval_logs').select('*,profiles(name)').eq('expense_id',expenseId).order('created_at')]);setExpense(exp);setLogs(lg||[]);}
-  async function doAction(action){setLoading(true);let newStatus;if(action==='submit')newStatus='pending_office';else if(action==='process')newStatus='processing';else if(action==='approve')newStatus='approved';else if(action==='reject')newStatus='rejected';await sb.from('expenses').update({status:newStatus}).eq('id',expenseId);await sb.from('approval_logs').insert({expense_id:expenseId,actor_id:profile.id,action,comment,from_status:expense.status,to_status:newStatus});setComment('');await loadData();setLoading(false);}
+  async function doAction(action){setLoading(true);let newStatus;if(action==='submit')newStatus='pending_office';else if(action==='process')newStatus='processing';else if(action==='approve')newStatus='approved';else if(action==='reject')newStatus='rejected';const patch={status:newStatus};if(newStatus==='approved')patch.approved_at=new Date().toISOString();await sb.from('expenses').update(patch).eq('id',expenseId);await sb.from('approval_logs').insert({expense_id:expenseId,actor_id:profile.id,action,comment,from_status:expense.status,to_status:newStatus});setComment('');await loadData();setLoading(false);}
   async function doDelete(){if(!confirm('この申請を削除しますか？'))return;await sb.from('expenses').delete().eq('id',expenseId);onBack();}
   if(!expense)return<div className="empty">読み込み中...</div>;
   const isOffice=profile.role==='office';
@@ -893,7 +894,7 @@ function ArchivePage({profile}){
   const total=expenses.reduce((s,e)=>s+e.amount,0);
   const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
   const groups={};
-  expenses.forEach(e=>{const key=e.company||'—';(groups[key]=groups[key]||{company:e.company,items:[]}).items.push(e);});
+  expenses.forEach(e=>{const day=(e.approved_at||e.created_at||'').slice(0,10);const key=`${e.company||'—'}__${day}`;(groups[key]=groups[key]||{company:e.company,day,items:[]}).items.push(e);});
   return(<div className="page"><div className="page-header"><div><div className="page-title">承認中</div><div className="page-sub">最終承認待ちの経費一覧</div></div></div><div className="filter-row"><select className="form-input" style={{width:150,fontSize:13}} value={monthFilter} onChange={e=>setMonthFilter(e.target.value)}><option value="">全月</option>{months.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select><select className="form-input" style={{width:150,fontSize:13}} value={companyFilter} onChange={e=>setCompanyFilter(e.target.value)}><option value="">全法人</option>{COMPANIES.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div>{!loading&&expenses.length>0&&(<div className="card" style={{padding:'12px 16px',marginBottom:12,display:'flex',justifyContent:'space-between',alignItems:'center'}}><span style={{fontSize:13,color:'#64748b'}}>承認中 {expenses.length}件</span><span style={{fontSize:16,fontWeight:700}}>{fmt(total)}</span></div>)}
     {loading?<div className="empty">読み込み中...</div>:expenses.length===0?<div className="card"><div className="empty">承認中の経費はありません</div></div>:(
       Object.entries(groups).map(([key,group])=>{
@@ -903,7 +904,7 @@ function ArchivePage({profile}){
         const isArchiving=archivingKey===key;
         return(<div className="batch-card" key={key}>
           <div className="batch-card-header" style={{position:'relative'}}>
-            <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'}｜{names}｜{fmt(t)}</span>
+            <span className="batch-card-title">{group.company?.replace('株式会社','')||'—'}｜{fmtMonthDay(group.day)}承認中へ移動｜{names}｜{fmt(t)}</span>
             <div style={{display:'flex',gap:8,position:'relative'}}>
               {isOffice&&(<>
               <button className="btn btn-secondary btn-sm" onClick={()=>setPickerKey(k=>k===key?null:key)} disabled={isFixing}>{isFixing?'作成中...':'📄 PDF（まとめ）'}</button>
@@ -912,7 +913,7 @@ function ArchivePage({profile}){
                 {COMPANIES.map(c=>(<button key={c.value} className="btn btn-secondary btn-sm" onClick={()=>handlePickCompanyAndPrint(group.items,key,c.value)}>{c.icon} {c.label.replace('株式会社','')}</button>))}
               </div>)}
               <button className="btn btn-success btn-sm" onClick={()=>handleMoveToArchived(group.items,key)} disabled={isArchiving}>{isArchiving?'処理中...':'✅ 承認済みへ'}</button>
-              <button className="btn btn-secondary btn-sm" onClick={()=>setAddModalCompany(group.company)}>➕ 追加</button>
+              <button className="btn btn-secondary btn-sm" onClick={()=>setAddModalCompany({company:group.company,approvedAt:group.items[0]?.approved_at||new Date().toISOString()})}>➕ 追加</button>
               </>)}
             </div>
           </div>
@@ -920,11 +921,11 @@ function ArchivePage({profile}){
         </div>);
       })
     )}
-    {addModalCompany&&<AddToApprovedModal profile={profile} targetCompany={addModalCompany} onClose={()=>setAddModalCompany(null)} onAdded={loadData}/>}
+    {addModalCompany&&<AddToApprovedModal profile={profile} targetCompany={addModalCompany.company} approvedAt={addModalCompany.approvedAt} onClose={()=>setAddModalCompany(null)} onAdded={loadData}/>}
   </div>);
 }
 
-function AddToApprovedModal({profile,targetCompany,onClose,onAdded}){
+function AddToApprovedModal({profile,targetCompany,approvedAt,onClose,onAdded}){
   const[items,setItems]=useState([]);
   const[loading,setLoading]=useState(true);
   const[selected,setSelected]=useState({});
@@ -946,7 +947,7 @@ function AddToApprovedModal({profile,targetCompany,onClose,onAdded}){
     setBusy(true);
     try{
       const ids=picked.map(e=>e.id);
-      await sb.from('expenses').update({status:'approved',company:targetCompany}).in('id',ids);
+      await sb.from('expenses').update({status:'approved',company:targetCompany,approved_at:approvedAt}).in('id',ids);
       await sb.from('approval_logs').insert(picked.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:`承認中（${targetCompany}）へ追加`,from_status:e.status,to_status:'approved'})));
       onAdded();
       onClose();
