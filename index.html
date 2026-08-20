@@ -206,8 +206,14 @@ window.onload=function(){
   });
 }
 <\/script></body></html>`;
-  const blob=new Blob([html],{type:'text/html;charset=utf-8;'});
-  window.open(URL.createObjectURL(blob),'_blank');
+  const w=window.open('','_blank');
+  if(!w){
+    alert('PDFのウィンドウを開けませんでした。ブラウザのポップアップブロックを許可してから、もう一度お試しください。');
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
 
 function printGroupPDF(items){
@@ -312,8 +318,14 @@ window.onload=function(){
 }
 <\/script>
   </body></html>`;
-  const blob=new Blob([html],{type:'text/html;charset=utf-8;'});
-  window.open(URL.createObjectURL(blob),'_blank');
+  const w=window.open('','_blank');
+  if(!w){
+    alert('PDFのウィンドウを開けませんでした。ブラウザのポップアップブロックを許可してから、もう一度お試しください。');
+    return;
+  }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
 
 function compressImage(file,maxDimension=1600,quality=0.8){
@@ -641,10 +653,9 @@ function ExpenseList({profile,company,onSelect,onNew,onBulk}){
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
     downloadBlob(blob,`umami_${(items[0].company||'').replace('株式会社','')}_${items[0].expense_date||''}.csv`);
   }
-  async function handlePrintPendingGroup(items){
-    await sb.from('expenses').update({pdf_generated_at:new Date().toISOString()}).in('id',items.map(e=>e.id));
+  function handlePrintPendingGroup(items){
     printGroupPDF(items);
-    await loadData();
+    setTimeout(loadData,600);
   }
   async function handleApproveGroup(items,key){
     setApprovingKey(key);
@@ -843,10 +854,10 @@ function ArchivePage({profile}){
   async function handlePickCompanyAndPrint(items,key,companyValue){
     setFixingKey(key);
     try{
-      const ids=items.map(e=>e.id);
-      await sb.from('expenses').update({company:companyValue}).in('id',ids);
       const updatedItems=items.map(e=>({...e,company:companyValue}));
       printGroupPDF(updatedItems);
+      const ids=items.map(e=>e.id);
+      await sb.from('expenses').update({company:companyValue}).in('id',ids);
       setPickerKey(null);
       await loadData();
     }catch(e){alert('法人の更新に失敗しました: '+e.message);}
@@ -911,10 +922,10 @@ function ArchivedPage({profile}){
   async function handlePickCompanyAndPrint(items,key,companyValue){
     setFixingKey(key);
     try{
-      const ids=items.map(e=>e.id);
-      await sb.from('expenses').update({company:companyValue}).in('id',ids);
       const updatedItems=items.map(e=>({...e,company:companyValue}));
       printGroupPDF(updatedItems);
+      const ids=items.map(e=>e.id);
+      await sb.from('expenses').update({company:companyValue}).in('id',ids);
       setPickerKey(null);
       await loadData();
     }catch(e){alert('法人の更新に失敗しました: '+e.message);}
