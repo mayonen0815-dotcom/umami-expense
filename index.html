@@ -848,7 +848,7 @@ function ExpenseDetail({profile,expenseId,onBack,onEdit}){
 
 function ArchivePage({profile}){
   const isOffice=profile.role==='office';
-  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[pickerKey,setPickerKey]=useState(null);const[fixingKey,setFixingKey]=useState(null);const[archivingKey,setArchivingKey]=useState(null);
+  const[expenses,setExpenses]=useState([]);const[loading,setLoading]=useState(true);const[monthFilter,setMonthFilter]=useState('');const[companyFilter,setCompanyFilter]=useState('');const[pickerKey,setPickerKey]=useState(null);const[fixingKey,setFixingKey]=useState(null);const[archivingKey,setArchivingKey]=useState(null);const[addModalCompany,setAddModalCompany]=useState(null);
   useEffect(()=>{loadData()},[monthFilter,companyFilter]);
   async function loadData(){
     setLoading(true);
@@ -882,16 +882,13 @@ function ArchivePage({profile}){
     }catch(e){alert('移動に失敗しました: '+e.message);}
     setArchivingKey(null);
   }
-  async function handleDeleteGroup(items,key){
-    const t=items.reduce((s,e)=>s+e.amount,0);
-    if(!confirm(`${items.length}件（合計${fmt(t)}）を削除しますか？（元に戻せません）`))return;
-    setArchivingKey(key);
+  async function handleRevertItem(item){
+    if(!confirm(`「${item.title}」を経費一覧（下書き）に戻しますか？（写真はそのまま残ります）`))return;
     try{
-      const ids=items.map(e=>e.id);
-      await sb.from('expenses').delete().in('id',ids);
+      await sb.from('expenses').update({status:'draft'}).eq('id',item.id);
+      await sb.from('approval_logs').insert({expense_id:item.id,actor_id:profile.id,action:'reject',comment:'承認中から経費一覧へ戻す',from_status:'approved',to_status:'draft'});
       await loadData();
-    }catch(e){alert('削除に失敗しました: '+e.message);}
-    setArchivingKey(null);
+    }catch(e){alert('戻すのに失敗しました: '+e.message);}
   }
   const total=expenses.reduce((s,e)=>s+e.amount,0);
   const months=Array.from({length:12},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return{value:d.toISOString().slice(0,7),label:`${d.getFullYear()}年${d.getMonth()+1}月`};});
@@ -915,14 +912,68 @@ function ArchivePage({profile}){
                 {COMPANIES.map(c=>(<button key={c.value} className="btn btn-secondary btn-sm" onClick={()=>handlePickCompanyAndPrint(group.items,key,c.value)}>{c.icon} {c.label.replace('株式会社','')}</button>))}
               </div>)}
               <button className="btn btn-success btn-sm" onClick={()=>handleMoveToArchived(group.items,key)} disabled={isArchiving}>{isArchiving?'処理中...':'✅ 承認済みへ'}</button>
-              <button className="btn btn-danger btn-sm" onClick={()=>handleDeleteGroup(group.items,key)} disabled={isArchiving}>🗑 削除</button>
+              <button className="btn btn-secondary btn-sm" onClick={()=>setAddModalCompany(group.company)}>➕ 追加</button>
               </>)}
             </div>
           </div>
-          <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-title">{e.bundled_at&&<span title="「まとめて経費」で移動済み" style={{marginRight:4}}>📦</span>}{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span></div>))}</div>
+          <div className="batch-card-body">{group.items.map(e=>(<div className="expense-row" key={e.id} style={{cursor:'default'}}><span className="expense-title">{e.bundled_at&&<span title="「まとめて経費」で移動済み" style={{marginRight:4}}>📦</span>}{e.title}</span><span className="expense-amount">{fmt(e.amount)}</span>{isOffice&&<button className="btn btn-secondary btn-sm" style={{flexShrink:0}} onClick={()=>handleRevertItem(e)}>↩ 経費一覧へ戻す</button>}</div>))}</div>
         </div>);
       })
     )}
+    {addModalCompany&&<AddToApprovedModal profile={profile} targetCompany={addModalCompany} onClose={()=>setAddModalCompany(null)} onAdded={loadData}/>}
+  </div>);
+}
+
+function AddToApprovedModal({profile,targetCompany,onClose,onAdded}){
+  const[items,setItems]=useState([]);
+  const[loading,setLoading]=useState(true);
+  const[selected,setSelected]=useState({});
+  const[busy,setBusy]=useState(false);
+  useEffect(()=>{load()},[]);
+  async function load(){
+    setLoading(true);
+    let q=sb.from('expenses').select('*,profiles(name)').in('status',['draft','pending_office','rejected','approved']);
+    if(profile.role==='staff')q=q.eq('user_id',profile.id);
+    const{data}=await q.order('expense_date',{ascending:false});
+    setItems((data||[]).filter(e=>!(e.status==='approved'&&e.company===targetCompany)));
+    setLoading(false);
+  }
+  function toggle(id){setSelected(s=>({...s,[id]:!s[id]}));}
+  const selectedIds=Object.keys(selected).filter(id=>selected[id]);
+  async function handleAdd(){
+    const picked=items.filter(e=>selectedIds.includes(e.id));
+    if(picked.length===0)return;
+    setBusy(true);
+    try{
+      const ids=picked.map(e=>e.id);
+      await sb.from('expenses').update({status:'approved',company:targetCompany}).in('id',ids);
+      await sb.from('approval_logs').insert(picked.map(e=>({expense_id:e.id,actor_id:profile.id,action:'approve',comment:`承認中（${targetCompany}）へ追加`,from_status:e.status,to_status:'approved'})));
+      onAdded();
+      onClose();
+    }catch(e){alert('追加に失敗しました: '+e.message);}
+    setBusy(false);
+  }
+  return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    <div style={{background:'#fff',borderRadius:14,padding:20,width:'100%',maxWidth:560,maxHeight:'85vh',display:'flex',flexDirection:'column'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+        <h3 style={{fontSize:16,fontWeight:700}}>➕ {targetCompany?.replace('株式会社','')}の承認中へ追加</h3>
+        <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={busy}>閉じる</button>
+      </div>
+      <p style={{fontSize:12,color:'#64748b',marginBottom:10}}>経費一覧にある経費から、この法人の承認中に追加するものを選んでください。{selectedIds.length}件選択中</p>
+      <div style={{flex:1,overflowY:'auto',border:'1px solid #f1f5f9',borderRadius:8}}>
+        {loading?<div className="empty">読み込み中...</div>:items.length===0?<div className="empty">追加できる経費がありません</div>:items.map(e=>(
+          <div key={e.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderBottom:'1px solid #f1f5f9',fontSize:12,cursor:'pointer'}} onClick={()=>toggle(e.id)}>
+            <input type="checkbox" className="checkbox" checked={!!selected[e.id]} onChange={()=>toggle(e.id)}/>
+            <span style={{width:56,flexShrink:0,color:'#94a3b8'}}>{e.expense_date?.slice(5).replace('-','/')}</span>
+            <span style={{width:64,flexShrink:0,color:'#94a3b8'}}>{e.company?.replace('株式会社','')||'—'}</span>
+            <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.title}</span>
+            <span style={{fontWeight:600,flexShrink:0}}>{fmt(e.amount)}</span>
+            <Badge status={e.status}/>
+          </div>
+        ))}
+      </div>
+      <button className="btn btn-primary" style={{marginTop:12}} onClick={handleAdd} disabled={busy||selectedIds.length===0}>{busy?'追加中...':`選択した${selectedIds.length}件を追加`}</button>
+    </div>
   </div>);
 }
 
